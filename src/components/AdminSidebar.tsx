@@ -37,18 +37,17 @@ const menuItems = [
 export function AdminSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
-  const location = useLocation();
 
   return (
     <Sidebar collapsible="icon">
       <SidebarContent>
         <div className="px-4 py-6 flex items-center gap-3">
           <div className="w-9 h-9 rounded-lg bg-sidebar-primary flex items-center justify-center shrink-0">
-            <span className="text-sidebar-primary-foreground font-bold text-sm">VZ</span>
+            <span className="text-sidebar-primary-foreground font-bold text-sm">P+</span>
           </div>
           {!collapsed && (
             <span className="text-sidebar-foreground font-bold text-lg tracking-tight">
-              VendiAdmin
+              Pod & Mais
             </span>
           )}
         </div>
