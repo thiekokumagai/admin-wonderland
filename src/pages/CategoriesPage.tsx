@@ -290,7 +290,11 @@ export default function CategoriesPage() {
                     </TableCell>
                     <TableCell>
                       {c.imagem ? (
-                        <img src={c.imagem} alt={c.nome} className="h-10 w-10 rounded-full object-cover" />
+                        <img
+                          src={`${import.meta.env.VITE_MINIO_PUBLIC_URL}/${import.meta.env.VITE_MINIO_BUCKET}/${c.imagem}`}
+                          alt={c.nome}
+                          className="h-10 w-10 rounded-full object-cover"
+                        />
                       ) : (
                         <div className="h-10 w-10 rounded-full bg-muted" />
                       )}
