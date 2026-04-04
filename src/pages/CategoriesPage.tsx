@@ -1,253 +1,190 @@
-import { useEffect, useMemo, useState } from "react";
-import { CategoryImage } from "@/data/mock-data";
+import { useEffect,useMemo, useState } from "react";
+import { useForm } from "react-hook-form";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "@/components/ui/use-toast";
-import { GripVertical, ImagePlus, Loader2, Plus, RefreshCw, Trash2, X } from "lucide-react";
 
-const API_BASE_URL = "https://ecommerce-core-api-production-3cc7.up.railway.app/api";
-const LOGIN_EMAIL = "admin@admin.com";
-const LOGIN_PASSWORD = "admin123";
+import {
+  GripVertical,
+  ImagePlus,
+  Loader2,
+  Plus,
+  RefreshCw,
+  Trash2,
+  X,
+} from "lucide-react";
 
-type ApiCategory = {
-  id: string;
-  title: string;
-  image: string | null;
-  deletedAt: string | null;
-};
-
-type LoginResponse = {
-  accessToken: string;
-  refreshToken: string;
-};
-
-type CategoryFormState = {
-  nome: string;
-  file: File | null;
-};
-
-const emptyCategory: CategoryFormState = { nome: "", file: null };
-
-const sortCategories = (items: CategoryImage[]) => [...items].sort((a, b) => a.ordem - b.ordem);
-
-const buildImageUrl = (imagePath: string | null) => {
-  if (!imagePath) return "";
-  if (imagePath.startsWith("http://") || imagePath.startsWith("https://")) return imagePath;
-  return `${import.meta.env.VITE_MINIO_PUBLIC_URL}/${import.meta.env.VITE_MINIO_BUCKET}/${imagePath}`;
-};
-
-const mapApiCategory = (category: ApiCategory, index: number): CategoryImage => ({
-  id: category.id,
-  nome: category.title,
-  imagem: buildImageUrl(category.image),
-  produtosAtivos: 0,
-  ordem: index + 1,
-  status: !category.deletedAt,
-});
-
-async function loginAndGetAccessToken() {
-  const response = await fetch(`${import.meta.env.VITE_ADMIN_API}/auth/login`, {
-    method: "POST",
-    credentials: 'include',
-    headers: {
-      accept: "application/json",
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      email: LOGIN_EMAIL,
-      password: LOGIN_PASSWORD,
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error("Não foi possível autenticar na API.");
-  }
-
-  const data = (await response.json()) as LoginResponse;
-  return data.accessToken;
-}
-
-async function fetchCategories(accessToken: string) {
-  const response = await fetch(`${import.meta.env.VITE_ADMIN_API}/categories`, {
-    credentials: 'include',
-    headers: {
-      accept: "application/json",
-      Authorization: `Bearer ${accessToken}`,
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error("Não foi possível carregar as categorias.");
-  }
-
-  const data = (await response.json()) as ApiCategory[];
-  return data.map(mapApiCategory);
-}
-
-async function createCategory(accessToken: string, form: CategoryFormState) {
-  const body = new FormData();
-  body.append("title", form.nome.trim());
-
-  if (form.file) {
-    body.append("file", form.file);
-  }
-
-  const response = await fetch(`${import.meta.env.VITE_ADMIN_API}/categories`, {
-    method: "POST",
-    credentials: 'include',
-    headers: {
-      accept: "application/json",
-      Authorization: `Bearer ${accessToken}`,
-    },
-    body,
-  });
-
-  if (!response.ok) {
-    throw new Error("Não foi possível criar a categoria.");
-  }
-}
+import { useCategories } from "@/hooks/useCategories";
+import { createCategory } from "@/services/category.service";
+import { buildImageUrl } from "@/utils/image-url";
+import type { CategoryList } from "@/types/category";
+import {
+  categorySchema,
+  type CategoryFormData,
+} from "@/validations/category.validation";
+import { zodResolver } from "@hookform/resolvers/zod";
 
 export default function CategoriesPage() {
-  const [categories, setCategories] = useState<CategoryImage[]>([]);
+  const { data: categories, loading, reload } = useCategories();
+
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState<CategoryFormState>(emptyCategory);
-  const [imagePreview, setImagePreview] = useState("");
   const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    watch,
+    reset,
+    formState: { errors },
+  } = useForm<CategoryFormData>({
+    resolver: zodResolver(categorySchema),
+    defaultValues: {
+      nome: "",
+      file: null,
+    },
+  });
+  const file = watch("file") as File | null;
+  const imagePreview = file ? URL.createObjectURL(file) : "";
 
-  const orderedCategories = useMemo(() => sortCategories(categories), [categories]);
+  const [localCategories, setLocalCategories] =
+    useState<CategoryList[]>([]);
 
-  const loadCategories = async (showRefreshState = false) => {
-    if (showRefreshState) {
-      setIsRefreshing(true);
-    } else {
-      setIsLoading(true);
-    }
+    useEffect(() => {
+      setLocalCategories(categories);
+    }, [categories]);
+  
+    const orderedCategories = useMemo(
+      () => [...localCategories].sort((a, b) => a.order - b.order),
+      [localCategories]
+    );
 
-    try {
-      const token = await loginAndGetAccessToken();
-      setAccessToken(token);
-      const nextCategories = await fetchCategories(token);
-      setCategories(sortCategories(nextCategories));
-    } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Erro ao carregar categorias",
-        description: error instanceof Error ? error.message : "Tente novamente em instantes.",
-      });
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
-    }
+  const handleReorder = (fromId: string, toId: string) => {
+    if (fromId === toId) return;
+
+    setLocalCategories((prev) => {
+      const items = [...prev];
+
+      const fromIndex = items.findIndex((i) => i.id === fromId);
+      const toIndex = items.findIndex((i) => i.id === toId);
+
+      if (fromIndex === -1 || toIndex === -1) return prev;
+
+      const [moved] = items.splice(fromIndex, 1);
+      items.splice(toIndex, 0, moved);
+
+      return items.map((item, index) => ({
+        ...item,
+        ordem: index + 1,
+      }));
+    });
   };
-
-  useEffect(() => {
-    void loadCategories();
-  }, []);
-
   const openCreate = () => {
-    setForm(emptyCategory);
-    setImagePreview("");
+    reset({
+      nome: "",
+      file: null,
+    });
+  
     setOpen(true);
   };
 
-  const handleCreate = async () => {
-    if (!form.nome.trim()) {
-      toast({
-        variant: "destructive",
-        title: "Nome obrigatório",
-        description: "Informe o nome da categoria antes de salvar.",
-      });
-      return;
-    }
-
+  const onSubmit = async (data: CategoryFormData) => {
     setIsSaving(true);
-
+  
     try {
-      const token = accessToken ?? (await loginAndGetAccessToken());
-      setAccessToken(token);
-      await createCategory(token, form);
+      await createCategory({
+        nome: data.nome,
+        file: data.file ?? null,
+      });
+  
+      reset();
       setOpen(false);
-      setForm(emptyCategory);
-      setImagePreview("");
-      await loadCategories(true);
+      await reload();
+  
       toast({
         title: "Categoria criada",
-        description: "A lista foi atualizada com os dados da API.",
       });
     } catch (error) {
       toast({
         variant: "destructive",
         title: "Erro ao criar categoria",
-        description: error instanceof Error ? error.message : "Tente novamente em instantes.",
       });
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handleDelete = () => {
-    toast({
-      title: "Exclusão indisponível",
-      description: "A API enviada inclui listagem e criação. Posso conectar exclusão quando você me passar o endpoint.",
-    });
-  };
-
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    setForm((prev) => ({ ...prev, file }));
-    setImagePreview(URL.createObjectURL(file));
+  
+    setValue("file", file);
   };
 
-  const handleReorder = (fromId: string, toId: string) => {
-    if (fromId === toId) return;
-
-    setCategories((prev) => {
-      const sorted = sortCategories(prev);
-      const fromIndex = sorted.findIndex((item) => item.id === fromId);
-      const toIndex = sorted.findIndex((item) => item.id === toId);
-
-      if (fromIndex === -1 || toIndex === -1) return prev;
-
-      const reordered = [...sorted];
-      const [moved] = reordered.splice(fromIndex, 1);
-      reordered.splice(toIndex, 0, moved);
-
-      return reordered.map((item, index) => ({ ...item, ordem: index + 1 }));
+  const handleDelete = () => {
+    toast({
+      title: "Delete ainda não implementado",
     });
   };
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Categorias</h1>
-          <p className="text-sm text-muted-foreground">Dados carregados da API. Arraste as linhas para reorganizar visualmente.</p>
+          <p className="text-sm text-muted-foreground">
+            Arraste para reordenar
+          </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => void loadCategories(true)} disabled={isRefreshing || isLoading}>
-            {isRefreshing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={async () => {
+              setIsRefreshing(true);
+              await reload();
+              setIsRefreshing(false);
+            }}
+            disabled={loading || isRefreshing}
+          >
+            {isRefreshing ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="mr-2 h-4 w-4" />
+            )}
             Atualizar
           </Button>
-          <Button onClick={openCreate}><Plus className="mr-1 h-4 w-4" />Nova Categoria</Button>
+
+          <Button onClick={openCreate}>
+            <Plus className="mr-1 h-4 w-4" />
+            Nova Categoria
+          </Button>
         </div>
       </div>
 
       <Card>
         <CardContent className="p-0">
-          {isLoading ? (
-            <div className="space-y-3 p-6">
+          {loading ? (
+            <div className="p-6 space-y-3">
               <Skeleton className="h-10 w-full" />
               <Skeleton className="h-10 w-full" />
               <Skeleton className="h-10 w-full" />
@@ -256,65 +193,68 @@ export default function CategoriesPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-12"></TableHead>
-                  <TableHead className="w-16">Imagem</TableHead>
-                  <TableHead>Nome</TableHead>
+                  <TableHead />
+                  <TableHead>Imagem</TableHead>
+                  <TableHead>Título</TableHead>
                   <TableHead>Ordem</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="w-24"></TableHead>
+                  <TableHead />
                 </TableRow>
               </TableHeader>
+
               <TableBody>
                 {orderedCategories.map((c) => (
                   <TableRow
                     key={c.id}
                     draggable
                     onDragStart={() => setDraggingId(c.id)}
-                    onDragOver={(event) => event.preventDefault()}
+                    onDragOver={(e) => e.preventDefault()}
                     onDrop={() => {
                       if (draggingId) handleReorder(draggingId, c.id);
                       setDraggingId(null);
                     }}
                     onDragEnd={() => setDraggingId(null)}
-                    className={draggingId === c.id ? "opacity-50" : undefined}
+                    className={
+                      draggingId === c.id ? "opacity-50" : ""
+                    }
                   >
                     <TableCell>
-                      <button
-                        type="button"
-                        className="cursor-grab text-muted-foreground active:cursor-grabbing"
-                        aria-label={`Arrastar ${c.nome}`}
-                      >
-                        <GripVertical className="h-4 w-4" />
-                      </button>
+                      <GripVertical className="h-4 w-4 text-muted-foreground" />
                     </TableCell>
+
                     <TableCell>
-                      {c.imagem ? (
+                      {c.image ? (
                         <img
-                          src={c.imagem}
-                          alt={c.nome}
+                          src={buildImageUrl(c.image)}
                           className="h-10 w-10 rounded-full object-cover"
                         />
                       ) : (
                         <div className="h-10 w-10 rounded-full bg-muted" />
                       )}
                     </TableCell>
-                    <TableCell className="font-medium">{c.nome}</TableCell>
-                    <TableCell>{c.ordem}</TableCell>
-                    <TableCell><Badge variant={c.status ? "default" : "secondary"}>{c.status ? "Ativa" : "Inativa"}</Badge></TableCell>
+
+                    <TableCell>{c.title}</TableCell>
+
+                    <TableCell>{c.order}</TableCell>
+
                     <TableCell>
-                      <div className="flex gap-1">
-                        <Button size="icon" variant="ghost" className="text-destructive" onClick={handleDelete}><Trash2 className="h-4 w-4" /></Button>
-                      </div>
+                      <Badge variant={c.deletedAt ? "secondary" : "default"}>
+                        {c.deletedAt ? "Inativa" : "Ativa"}
+                      </Badge>
+                    </TableCell>
+
+                    <TableCell>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={handleDelete}
+                        className="text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}
-                {orderedCategories.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
-                      Nenhuma categoria encontrada.
-                    </TableCell>
-                  </TableRow>
-                )}
               </TableBody>
             </Table>
           )}
@@ -326,34 +266,57 @@ export default function CategoriesPage() {
           <DialogHeader>
             <DialogTitle>Nova Categoria</DialogTitle>
           </DialogHeader>
+
           <div className="space-y-4">
-            <div className="flex flex-col items-center gap-2">
+            <div className="flex justify-center">
               {imagePreview ? (
                 <div className="relative">
-                  <img src={imagePreview} alt="Preview" className="h-24 w-24 rounded-full border-2 border-primary object-cover" />
-                  <button type="button" onClick={() => {
-                    setImagePreview("");
-                    setForm((prev) => ({ ...prev, file: null }));
-                  }} className="absolute -right-1 -top-1 rounded-full bg-destructive p-0.5 text-destructive-foreground">
-                    <X className="h-3 w-3" />
-                  </button>
+                  <img
+                    src={imagePreview}
+                    className="h-24 w-24 rounded-full object-cover"
+                  />
+                    <button
+                      type="button"
+                      onClick={() => setValue("file", null)}
+                      className="absolute -top-2 -right-2 bg-destructive p-1 rounded-full"
+                    >
+                      <X className="h-3 w-3 text-white" />
+                    </button>
                 </div>
               ) : (
-                <label className="flex h-24 w-24 cursor-pointer items-center justify-center rounded-full border-2 border-dashed transition-colors hover:border-primary">
+                <label className="h-24 w-24 flex items-center justify-center border-2 border-dashed rounded-full cursor-pointer">
                   <ImagePlus className="h-6 w-6 text-muted-foreground" />
-                  <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+                  <input
+                    type="file"
+                    hidden
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                  />
                 </label>
               )}
-              <span className="text-xs text-muted-foreground">Imagem da categoria</span>
             </div>
+
             <div>
               <Label>Nome</Label>
-              <Input value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} />
+              <Input {...register("nome")} />
+              {errors.nome && (
+                <p className="text-sm text-red-500">
+                  {errors.nome.message}
+                </p>
+              )}
             </div>
-            <Button className="w-full" onClick={() => void handleCreate()} disabled={isSaving}>
-              {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Criar Categoria
+
+            <Button
+              className="w-full"
+              onClick={handleSubmit(onSubmit)}
+              disabled={isSaving}
+            >
+              {isSaving && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              Criar
             </Button>
+            
           </div>
         </DialogContent>
       </Dialog>

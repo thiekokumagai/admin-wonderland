@@ -2,8 +2,8 @@
 
 export interface CategoryImage {
   id: string;
-  nome: string;
-  imagem?: string;
+  title: string;
+  image?: string;
   produtosAtivos: number;
   ordem: number;
   status: boolean;
