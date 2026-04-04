@@ -22,27 +22,13 @@ export default defineConfig(({ mode }) => ({
   build: {
     rollupOptions: {
       output: {
+        // Only split recharts — aggressive vendor/react splitting caused
+        // "Cannot read properties of undefined (reading 'forwardRef')" in prod
+        // (React not initialized before dependent chunks).
         manualChunks(id) {
-          if (!id.includes("node_modules")) return;
-
-          if (
-            id.includes("/react-dom/") ||
-            id.includes("/react-router") ||
-            id.includes("/scheduler/") ||
-            (id.includes("/react/") && !id.includes("react-hook") && !id.includes("react-day") && !id.includes("react-resizable"))
-          ) {
-            return "react-vendor";
-          }
-          if (id.includes("@tanstack/react-query")) {
-            return "tanstack-query";
-          }
-          if (id.includes("recharts")) {
+          if (id.includes("node_modules/recharts")) {
             return "recharts";
           }
-          if (id.includes("@radix-ui")) {
-            return "radix-ui";
-          }
-          return "vendor";
         },
       },
     },
