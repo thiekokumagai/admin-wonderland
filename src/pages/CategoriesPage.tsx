@@ -53,8 +53,9 @@ const mapApiCategory = (category: ApiCategory, index: number): CategoryImage => 
 });
 
 async function loginAndGetAccessToken() {
-  const response = await fetch(`${API_BASE_URL}/auth/login`, {
+  const response = await fetch(`${import.meta.env.VITE_ADMIN_API}/auth/login`, {
     method: "POST",
+    credentials: 'include',
     headers: {
       accept: "application/json",
       "Content-Type": "application/json",
@@ -74,7 +75,8 @@ async function loginAndGetAccessToken() {
 }
 
 async function fetchCategories(accessToken: string) {
-  const response = await fetch(`${API_BASE_URL}/categories`, {
+  const response = await fetch(`${import.meta.env.VITE_ADMIN_API}/categories`, {
+    credentials: 'include',
     headers: {
       accept: "application/json",
       Authorization: `Bearer ${accessToken}`,
@@ -97,8 +99,9 @@ async function createCategory(accessToken: string, form: CategoryFormState) {
     body.append("file", form.file);
   }
 
-  const response = await fetch(`${API_BASE_URL}/categories`, {
+  const response = await fetch(`${import.meta.env.VITE_ADMIN_API}/categories`, {
     method: "POST",
+    credentials: 'include',
     headers: {
       accept: "application/json",
       Authorization: `Bearer ${accessToken}`,
