@@ -14,7 +14,6 @@ import { GripVertical, ImagePlus, Loader2, Plus, RefreshCw, Trash2, X } from "lu
 const API_BASE_URL = "https://ecommerce-core-api-production-3cc7.up.railway.app/api";
 const LOGIN_EMAIL = "admin@admin.com";
 const LOGIN_PASSWORD = "admin123";
-const FILE_BASE_URL = "https://ecommerce-core-api-production-3cc7.up.railway.app/";
 
 type ApiCategory = {
   id: string;
@@ -40,7 +39,7 @@ const sortCategories = (items: CategoryImage[]) => [...items].sort((a, b) => a.o
 const buildImageUrl = (imagePath: string | null) => {
   if (!imagePath) return "";
   if (imagePath.startsWith("http://") || imagePath.startsWith("https://")) return imagePath;
-  return `${FILE_BASE_URL}${imagePath}`;
+  return `${import.meta.env.VITE_MINIO_PUBLIC_URL}/${import.meta.env.VITE_MINIO_BUCKET}/${imagePath}`;
 };
 
 const mapApiCategory = (category: ApiCategory, index: number): CategoryImage => ({
@@ -291,7 +290,7 @@ export default function CategoriesPage() {
                     <TableCell>
                       {c.imagem ? (
                         <img
-                          src={`${import.meta.env.VITE_MINIO_PUBLIC_URL}/${import.meta.env.VITE_MINIO_BUCKET}/${c.imagem}`}
+                          src={c.imagem}
                           alt={c.nome}
                           className="h-10 w-10 rounded-full object-cover"
                         />
