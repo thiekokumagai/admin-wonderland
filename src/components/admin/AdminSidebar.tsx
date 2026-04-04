@@ -1,3 +1,5 @@
+import { forwardRef } from "react";
+import { NavLink as RouterNavLink, NavLinkProps } from "react-router-dom";
 import {
   LayoutDashboard,
   ShoppingBag,
@@ -9,8 +11,7 @@ import {
   Settings,
   Landmark,
 } from "lucide-react";
-import { NavLink } from "@/components/NavLink";
-import { useLocation } from "react-router-dom";
+import { cn } from "@/lib/utils";
 import {
   Sidebar,
   SidebarContent,
@@ -21,6 +22,29 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+
+interface NavLinkCompatProps extends Omit<NavLinkProps, "className"> {
+  className?: string;
+  activeClassName?: string;
+  pendingClassName?: string;
+}
+
+const NavLink = forwardRef<HTMLAnchorElement, NavLinkCompatProps>(
+  ({ className, activeClassName, pendingClassName, to, ...props }, ref) => {
+    return (
+      <RouterNavLink
+        ref={ref}
+        to={to}
+        className={({ isActive, isPending }) =>
+          cn(className, isActive && activeClassName, isPending && pendingClassName)
+        }
+        {...props}
+      />
+    );
+  },
+);
+
+NavLink.displayName = "NavLink";
 
 const menuItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },

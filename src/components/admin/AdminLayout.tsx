@@ -1,5 +1,5 @@
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { AdminSidebar } from "@/components/AdminSidebar";
+import { AdminSidebar } from "./AdminSidebar";
 import { LogOut, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Outlet } from "react-router-dom";

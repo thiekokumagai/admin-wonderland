@@ -1,0 +1,33 @@
+{
+  "version": 2,
+  "skills": {
+    "component-flattening-analysis": {
+      "name": "component-flattening-analysis",
+      "source": "local",
+      "contentHash": "085696b944897a2d8c96efb6e0a3faab00f910a62a49a45c3293c32458962411",
+      "installedAt": "2026-04-04T14:21:56.390Z",
+      "updatedAt": "2026-04-04T14:21:56.417Z",
+      "agents": [
+        "cursor",
+        "claude-code",
+        "windsurf"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "perf-web-optimization": {
+      "name": "perf-web-optimization",
+      "source": "local",
+      "contentHash": "864bb35d6ec7e7755181886b57709b76d8b5da5181a6d8480cd412dd772f1ffb",
+      "installedAt": "2026-04-04T14:43:37.513Z",
+      "updatedAt": "2026-04-04T14:43:37.548Z",
+      "agents": [
+        "cursor",
+        "claude-code",
+        "windsurf"
+      ],
+      "method": "copy",
+      "global": false
+    }
+  }
+}
