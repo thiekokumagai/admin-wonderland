@@ -11,3 +11,10 @@ export type CreateCategoryDTO = {
     isVisible: boolean;
     file: File | null;
   };
+
+  export type UpdateCategoryDTO = {
+    title?: string;
+    file?: File | null;
+    isVisible?: boolean;
+    removeImage?: boolean;
+  };

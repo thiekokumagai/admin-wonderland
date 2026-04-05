@@ -34,19 +34,20 @@ import {
 } from "lucide-react";
 
 import { useCategories } from "@/hooks/useCategories";
-import { createCategory, deleteCategory } from "@/services/category.service";
+import { createCategory, updateCategory, deleteCategory } from "@/services/category.service";
 import { buildImageUrl } from "@/utils/image-url";
 import type { CategoryList } from "@/types/category";
 import { Controller } from "react-hook-form";
+import { Pencil } from "lucide-react";
 import {
   categorySchema,
   type CategoryFormData,
 } from "@/validations/category.validation";
 import { zodResolver } from "@hookform/resolvers/zod";
-
 export default function CategoriesPage() {
   const { data: categories, loading, reload } = useCategories();
-
+  const [editingCategory, setEditingCategory] = useState<CategoryList | null>(null);
+  const [removeImage, setRemoveImage] = useState(false);
   const [open, setOpen] = useState(false);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -68,8 +69,15 @@ export default function CategoriesPage() {
     },
   });
   const file = watch("file") as File | null;
-  const imagePreview = file ? URL.createObjectURL(file) : "";
-
+  const [imagePreview, setImagePreview] = useState<string>("");
+  useEffect(() => {
+    if (file) {
+      const url = URL.createObjectURL(file);
+      setImagePreview(url);
+  
+      return () => URL.revokeObjectURL(url);
+    }
+  }, [file]);
   const [localCategories, setLocalCategories] =
     useState<CategoryList[]>([]);
 
@@ -103,38 +111,57 @@ export default function CategoriesPage() {
     });
   };
   const openCreate = () => {
+    setEditingCategory(null);
+    setImagePreview("");
+    setRemoveImage(false);
+  
     reset({
       title: "",
       file: null,
+      isVisible: true,
     });
   
     setOpen(true);
   };
 
   const onSubmit = async (data: CategoryFormData) => {
-    console.log("FORM DATA:", data);
     setIsSaving(true);
   
     try {
-      await createCategory({
-        title: data.title,
-        file: data.file ?? null,
-        isVisible: data.isVisible
+      if (editingCategory) {
+        await updateCategory(editingCategory.id, {
+          title: data.title,
+          file: data.file ?? null,
+          isVisible: data.isVisible === true,
+          removeImage,
+        });
+  
+        toast({ title: "Categoria atualizada" });
+      } else {
+        await createCategory({
+          title: data.title,
+          file: data.file ?? null,
+          isVisible: data.isVisible === true,
+        });
+  
+        toast({ title: "Categoria criada" });
+      }
+      reset({
+        title: "",
+        file: null,
+        isVisible: true,
       });
   
-      reset();
+      setImagePreview("");
+      setRemoveImage(false);
+      setEditingCategory(null);
       setOpen(false);
-      await reload();
   
-      toast({
-        title: "Categoria criada",
-        duration: 3000,
-      });
-    } catch (error) {
+      await reload();
+    } catch {
       toast({
         variant: "destructive",
-        title: "Erro ao criar categoria",
-        duration: 3000,
+        title: "Erro ao salvar categoria",
       });
     } finally {
       setIsSaving(false);
@@ -146,6 +173,10 @@ export default function CategoriesPage() {
     if (!file) return;
   
     setValue("file", file);
+    if (removeImage) {
+      setRemoveImage(false);
+    }
+    setImagePreview(URL.createObjectURL(file));
   };
 
   const handleDelete = async (id: string) => {
@@ -169,7 +200,23 @@ export default function CategoriesPage() {
       });
     }
   };
-
+  const openEdit = (category: CategoryList) => {
+    setEditingCategory(category);
+  
+    setImagePreview(
+      category.image ? buildImageUrl(category.image) : ""
+    );
+  
+    setRemoveImage(false);
+  
+    reset({
+      title: category.title,
+      file: null,
+      isVisible: category.isVisible,
+    });
+  
+    setOpen(true);
+  };
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -271,6 +318,13 @@ export default function CategoriesPage() {
                       <Button
                         size="icon"
                         variant="ghost"
+                        onClick={() => openEdit(c)}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
                         onClick={() => handleDelete(c.id)}
                         className="text-destructive"
                       >
@@ -287,9 +341,9 @@ export default function CategoriesPage() {
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Nova Categoria</DialogTitle>
-          </DialogHeader>
+          <DialogTitle>
+            {editingCategory ? "Editar Categoria" : "Nova Categoria"}
+          </DialogTitle>
 
           <div className="space-y-4">
             <div className="flex justify-center">
@@ -301,7 +355,11 @@ export default function CategoriesPage() {
                   />
                     <button
                       type="button"
-                      onClick={() => setValue("file", null)}
+                      onClick={() => {
+                        setValue("file", null);
+                        setImagePreview("");
+                        setRemoveImage(true);
+                      }}
                       className="absolute -top-2 -right-2 bg-destructive p-1 rounded-full"
                     >
                       <X className="h-3 w-3 text-white" />
@@ -351,7 +409,7 @@ export default function CategoriesPage() {
               {isSaving && (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               )}
-              Criar
+              {editingCategory ? "Editar" : "Criar"}              
             </Button>
             
           </div>
