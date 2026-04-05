@@ -11,13 +11,18 @@ export async function createCategory(
   form: CreateCategoryDTO
 ): Promise<void> {
   const body = new FormData();
-  body.append("title", form.nome.trim());
+  body.append("title", form.title.trim());
   if (form.file) {
     body.append("file", form.file);
   }
-
+  body.append("isVisible", form.isVisible ? "true" : "false");
   await apiFetch("/categories", {
     method: "POST",
     body,
+  });
+}
+export async function deleteCategory(id: string): Promise<void> {
+  await apiFetch(`/categories/${id}`, {
+    method: "DELETE",
   });
 }

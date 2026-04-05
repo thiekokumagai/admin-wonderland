@@ -3,9 +3,11 @@ export type CategoryList = {
     title: string;
     image: string | null;
     order: number | null;
+    isVisible: boolean;
     deletedAt: string | null;
 };
 export type CreateCategoryDTO = {
-    nome: string;
+    title: string;
+    isVisible: boolean;
     file: File | null;
   };

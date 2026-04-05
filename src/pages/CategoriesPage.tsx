@@ -3,6 +3,7 @@ import { useForm } from "react-hook-form";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -33,9 +34,10 @@ import {
 } from "lucide-react";
 
 import { useCategories } from "@/hooks/useCategories";
-import { createCategory } from "@/services/category.service";
+import { createCategory, deleteCategory } from "@/services/category.service";
 import { buildImageUrl } from "@/utils/image-url";
 import type { CategoryList } from "@/types/category";
+import { Controller } from "react-hook-form";
 import {
   categorySchema,
   type CategoryFormData,
@@ -52,6 +54,7 @@ export default function CategoriesPage() {
   const {
     register,
     handleSubmit,
+    control,
     setValue,
     watch,
     reset,
@@ -59,8 +62,9 @@ export default function CategoriesPage() {
   } = useForm<CategoryFormData>({
     resolver: zodResolver(categorySchema),
     defaultValues: {
-      nome: "",
+      title: "",
       file: null,
+      isVisible: true,
     },
   });
   const file = watch("file") as File | null;
@@ -100,7 +104,7 @@ export default function CategoriesPage() {
   };
   const openCreate = () => {
     reset({
-      nome: "",
+      title: "",
       file: null,
     });
   
@@ -108,12 +112,14 @@ export default function CategoriesPage() {
   };
 
   const onSubmit = async (data: CategoryFormData) => {
+    console.log("FORM DATA:", data);
     setIsSaving(true);
   
     try {
       await createCategory({
-        nome: data.nome,
+        title: data.title,
         file: data.file ?? null,
+        isVisible: data.isVisible
       });
   
       reset();
@@ -122,11 +128,13 @@ export default function CategoriesPage() {
   
       toast({
         title: "Categoria criada",
+        duration: 3000,
       });
     } catch (error) {
       toast({
         variant: "destructive",
         title: "Erro ao criar categoria",
+        duration: 3000,
       });
     } finally {
       setIsSaving(false);
@@ -140,10 +148,26 @@ export default function CategoriesPage() {
     setValue("file", file);
   };
 
-  const handleDelete = () => {
-    toast({
-      title: "Delete ainda não implementado",
-    });
+  const handleDelete = async (id: string) => {
+    const confirmDelete = confirm("Tem certeza que deseja deletar?");
+  
+    if (!confirmDelete) return;
+  
+    try {
+      await deleteCategory(id);
+      await reload();
+  
+      toast({
+        title: "Categoria deletada",
+        duration: 3000,
+      });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Erro ao deletar categoria",
+        duration: 3000,
+      });
+    }
   };
 
   return (
@@ -238,8 +262,8 @@ export default function CategoriesPage() {
                     <TableCell>{c.order}</TableCell>
 
                     <TableCell>
-                      <Badge variant={c.deletedAt ? "secondary" : "default"}>
-                        {c.deletedAt ? "Inativa" : "Ativa"}
+                      <Badge variant={c.isVisible ? "default" : "secondary" }>
+                        {c.isVisible ? "Ativa" : "Inativa"}
                       </Badge>
                     </TableCell>
 
@@ -247,7 +271,7 @@ export default function CategoriesPage() {
                       <Button
                         size="icon"
                         variant="ghost"
-                        onClick={handleDelete}
+                        onClick={() => handleDelete(c.id)}
                         className="text-destructive"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -297,15 +321,28 @@ export default function CategoriesPage() {
             </div>
 
             <div>
-              <Label>Nome</Label>
-              <Input {...register("nome")} />
-              {errors.nome && (
-                <p className="text-sm text-red-500">
-                  {errors.nome.message}
+              <Label>Título</Label>
+              <Input {...register("title")} />
+              {errors.title && (
+                <p className="text-sm text-red-500 mt-2">
+                  {errors.title.message}
                 </p>
               )}
             </div>
-
+            <Controller
+              name="isVisible"
+              control={control}
+              defaultValue={true}
+              render={({ field }) => (
+                <div className="flex items-center justify-between">
+                  <Label>Visível no site</Label>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </div>
+              )}
+            />
             <Button
               className="w-full"
               onClick={handleSubmit(onSubmit)}

@@ -1,15 +1,16 @@
 import { z } from "zod";
 
 export const categorySchema = z.object({
-  nome: z
+  title: z
     .string()
-    .min(1, "Nome é obrigatório")
-    .max(50, "Nome muito grande"),
+    .min(1, "Título é obrigatório")
+    .max(50, "Título muito grande"),
 
   file: z
     .any()
     .nullable()
-    .optional(),
+    .optional(),  
+    isVisible: z.boolean().optional(),
 });
 
 export type CategoryFormData = z.infer<typeof categorySchema>;
