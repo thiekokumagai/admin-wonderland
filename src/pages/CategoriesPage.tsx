@@ -1,13 +1,17 @@
-import { useEffect,useMemo, useState } from "react";
-import { useForm } from "react-hook-form";
-import { Card, CardContent } from "@/components/ui/card";
+import { useEffect, useState, useRef } from "react";
+import { useForm, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+
+import {
+  Card,
+  CardContent,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
@@ -31,27 +35,43 @@ import {
   RefreshCw,
   Trash2,
   X,
+  Pencil,
 } from "lucide-react";
 
 import { useCategories } from "@/hooks/useCategories";
-import { createCategory, updateCategory, deleteCategory } from "@/services/category.service";
+import {
+  createCategory,
+  updateCategory,
+  deleteCategory,
+  updateCategoryOrderBatch,
+} from "@/services/category.service";
+
 import { buildImageUrl } from "@/utils/image-url";
 import type { CategoryList } from "@/types/category";
-import { Controller } from "react-hook-form";
-import { Pencil } from "lucide-react";
+
 import {
   categorySchema,
   type CategoryFormData,
 } from "@/validations/category.validation";
-import { zodResolver } from "@hookform/resolvers/zod";
+
 export default function CategoriesPage() {
   const { data: categories, loading, reload } = useCategories();
+
+  const [localCategories, setLocalCategories] = useState<CategoryList[]>([]);
   const [editingCategory, setEditingCategory] = useState<CategoryList | null>(null);
-  const [removeImage, setRemoveImage] = useState(false);
+
   const [open, setOpen] = useState(false);
   const [draggingId, setDraggingId] = useState<string | null>(null);
+
   const [isSaving, setIsSaving] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const [imagePreview, setImagePreview] = useState("");
+  const [removeImage, setRemoveImage] = useState(false);
+
+  const saveTimeout = useRef<NodeJS.Timeout | null>(null);
+  const isSavingOrderRef = useRef(false);
+
   const {
     register,
     handleSubmit,
@@ -68,28 +88,41 @@ export default function CategoriesPage() {
       isVisible: true,
     },
   });
+
   const file = watch("file") as File | null;
-  const [imagePreview, setImagePreview] = useState<string>("");
   useEffect(() => {
-    if (file) {
-      const url = URL.createObjectURL(file);
-      setImagePreview(url);
-  
-      return () => URL.revokeObjectURL(url);
-    }
+    if (categories) setLocalCategories(categories);
+  }, [categories]);
+  useEffect(() => {
+    return () => {
+      if (saveTimeout.current) clearTimeout(saveTimeout.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!file) return;
+
+    const url = URL.createObjectURL(file);
+    setImagePreview(url);
+
+    return () => URL.revokeObjectURL(url);
   }, [file]);
-  const [localCategories, setLocalCategories] =
-    useState<CategoryList[]>([]);
+  const saveOrder = async (items: CategoryList[]) => {
+    if (isSavingOrderRef.current) return;
 
-    useEffect(() => {
-      setLocalCategories(categories);
-    }, [categories]);
-  
-    const orderedCategories = useMemo(
-      () => [...localCategories].sort((a, b) => a.order - b.order),
-      [localCategories]
-    );
+    isSavingOrderRef.current = true;
 
+    try {
+      await updateCategoryOrderBatch(
+        items.map((item, index) => ({
+          id: item.id,
+          order: index + 1,
+        }))
+      );
+    } finally {
+      isSavingOrderRef.current = false;
+    }
+  };
   const handleReorder = (fromId: string, toId: string) => {
     if (fromId === toId) return;
 
@@ -104,59 +137,82 @@ export default function CategoriesPage() {
       const [moved] = items.splice(fromIndex, 1);
       items.splice(toIndex, 0, moved);
 
-      return items.map((item, index) => ({
+      const updated = items.map((item, index) => ({
         ...item,
-        ordem: index + 1,
+        order: index + 1,
       }));
+
+      if (saveTimeout.current) clearTimeout(saveTimeout.current);
+
+      saveTimeout.current = setTimeout(() => {
+        saveOrder(updated);
+      }, 300);
+
+      return updated;
     });
   };
   const openCreate = () => {
     setEditingCategory(null);
     setImagePreview("");
     setRemoveImage(false);
-  
+
     reset({
       title: "",
       file: null,
       isVisible: true,
     });
-  
+
     setOpen(true);
   };
 
+  const openEdit = (category: CategoryList) => {
+    setEditingCategory(category);
+
+    setImagePreview(category.image ? buildImageUrl(category.image) : "");
+    setRemoveImage(false);
+
+    reset({
+      title: category.title,
+      file: null,
+      isVisible: category.isVisible,
+    });
+
+    setOpen(true);
+  };
   const onSubmit = async (data: CategoryFormData) => {
     setIsSaving(true);
-  
+
     try {
       if (editingCategory) {
         await updateCategory(editingCategory.id, {
           title: data.title,
           file: data.file ?? null,
-          isVisible: data.isVisible === true,
+          isVisible: data.isVisible,
           removeImage,
         });
-  
+
         toast({ title: "Categoria atualizada" });
       } else {
         await createCategory({
           title: data.title,
           file: data.file ?? null,
-          isVisible: data.isVisible === true,
+          isVisible: data.isVisible,
         });
-  
+
         toast({ title: "Categoria criada" });
       }
+
       reset({
         title: "",
         file: null,
         isVisible: true,
       });
-  
+
+      setOpen(false);
+      setEditingCategory(null);
       setImagePreview("");
       setRemoveImage(false);
-      setEditingCategory(null);
-      setOpen(false);
-  
+
       await reload();
     } catch {
       toast({
@@ -167,55 +223,29 @@ export default function CategoriesPage() {
       setIsSaving(false);
     }
   };
-
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-  
+
     setValue("file", file);
-    if (removeImage) {
-      setRemoveImage(false);
-    }
+    setRemoveImage(false);
+
     setImagePreview(URL.createObjectURL(file));
   };
-
   const handleDelete = async (id: string) => {
-    const confirmDelete = confirm("Tem certeza que deseja deletar?");
-  
-    if (!confirmDelete) return;
-  
+    if (!confirm("Tem certeza que deseja deletar?")) return;
+
     try {
       await deleteCategory(id);
       await reload();
-  
-      toast({
-        title: "Categoria deletada",
-        duration: 3000,
-      });
-    } catch (error) {
+
+      toast({ title: "Categoria deletada" });
+    } catch {
       toast({
         variant: "destructive",
         title: "Erro ao deletar categoria",
-        duration: 3000,
       });
     }
-  };
-  const openEdit = (category: CategoryList) => {
-    setEditingCategory(category);
-  
-    setImagePreview(
-      category.image ? buildImageUrl(category.image) : ""
-    );
-  
-    setRemoveImage(false);
-  
-    reset({
-      title: category.title,
-      file: null,
-      isVisible: category.isVisible,
-    });
-  
-    setOpen(true);
   };
   return (
     <div className="space-y-6">
@@ -235,7 +265,6 @@ export default function CategoriesPage() {
               await reload();
               setIsRefreshing(false);
             }}
-            disabled={loading || isRefreshing}
           >
             {isRefreshing ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -267,14 +296,13 @@ export default function CategoriesPage() {
                   <TableHead />
                   <TableHead>Imagem</TableHead>
                   <TableHead>Título</TableHead>
-                  <TableHead>Ordem</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead />
                 </TableRow>
               </TableHeader>
 
               <TableBody>
-                {orderedCategories.map((c) => (
+                {localCategories.map((c) => (
                   <TableRow
                     key={c.id}
                     draggable
@@ -285,12 +313,10 @@ export default function CategoriesPage() {
                       setDraggingId(null);
                     }}
                     onDragEnd={() => setDraggingId(null)}
-                    className={
-                      draggingId === c.id ? "opacity-50" : ""
-                    }
+                    className={draggingId === c.id ? "opacity-50" : ""}
                   >
                     <TableCell>
-                      <GripVertical className="h-4 w-4 text-muted-foreground" />
+                      <GripVertical className="h-4 w-4 text-muted-foreground hover:cursor-grabbing" />
                     </TableCell>
 
                     <TableCell>
@@ -306,22 +332,17 @@ export default function CategoriesPage() {
 
                     <TableCell>{c.title}</TableCell>
 
-                    <TableCell>{c.order}</TableCell>
-
                     <TableCell>
-                      <Badge variant={c.isVisible ? "default" : "secondary" }>
+                      <Badge variant={c.isVisible ? "default" : "secondary"}>
                         {c.isVisible ? "Ativa" : "Inativa"}
                       </Badge>
                     </TableCell>
 
                     <TableCell>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => openEdit(c)}
-                      >
+                      <Button size="icon" variant="ghost" onClick={() => openEdit(c)}>
                         <Pencil className="h-4 w-4" />
                       </Button>
+
                       <Button
                         size="icon"
                         variant="ghost"
@@ -346,24 +367,25 @@ export default function CategoriesPage() {
           </DialogTitle>
 
           <div className="space-y-4">
-            <div className="flex justify-center">
+          <div className="flex justify-center">
               {imagePreview ? (
                 <div className="relative">
                   <img
                     src={imagePreview}
                     className="h-24 w-24 rounded-full object-cover"
                   />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setValue("file", null);
-                        setImagePreview("");
-                        setRemoveImage(true);
-                      }}
-                      className="absolute -top-2 -right-2 bg-destructive p-1 rounded-full"
-                    >
-                      <X className="h-3 w-3 text-white" />
-                    </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setValue("file", null);
+                      setImagePreview("");
+                      setRemoveImage(true);
+                    }}
+                    className="absolute -top-2 -right-2 bg-destructive p-1 rounded-full"
+                  >
+                    <X className="h-3 w-3 text-white" />
+                  </button>
                 </div>
               ) : (
                 <label className="h-24 w-24 flex items-center justify-center border-2 border-dashed rounded-full cursor-pointer">
@@ -377,7 +399,6 @@ export default function CategoriesPage() {
                 </label>
               )}
             </div>
-
             <div>
               <Label>Título</Label>
               <Input {...register("title")} />
@@ -387,10 +408,10 @@ export default function CategoriesPage() {
                 </p>
               )}
             </div>
+
             <Controller
               name="isVisible"
               control={control}
-              defaultValue={true}
               render={({ field }) => (
                 <div className="flex items-center justify-between">
                   <Label>Visível no site</Label>
@@ -401,17 +422,15 @@ export default function CategoriesPage() {
                 </div>
               )}
             />
+
             <Button
               className="w-full"
               onClick={handleSubmit(onSubmit)}
               disabled={isSaving}
             >
-              {isSaving && (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              )}
-              {editingCategory ? "Editar" : "Criar"}              
+              {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {editingCategory ? "Editar" : "Criar"}
             </Button>
-            
           </div>
         </DialogContent>
       </Dialog>

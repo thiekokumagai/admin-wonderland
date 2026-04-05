@@ -51,3 +51,13 @@ export async function deleteCategory(id: string): Promise<void> {
     method: "DELETE",
   });
 }
+export async function updateCategoryOrderBatch(
+  items: { id: string; order: number }[]
+) {
+  const response = await apiFetch("/categories/batch/order", {
+    method: "PATCH",
+    body: JSON.stringify({ items }),
+  });
+
+  return response.json();
+}
