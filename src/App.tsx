@@ -15,6 +15,7 @@ const DeliveriesPage = lazy(() => import("@/pages/DeliveriesPage"));
 const PaymentsPage = lazy(() => import("@/pages/PaymentsPage"));
 const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
 const CashRegisterPage = lazy(() => import("@/pages/CashRegisterPage"));
+const VariationPage = lazy(() => import("@/pages/VariationPage"));
 const LoginPage = lazy(() => import("@/pages/LoginPage"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
@@ -53,6 +54,7 @@ const App = () => (
                 <Route path="/pagamentos" element={<PaymentsPage />} />
                 <Route path="/configuracoes" element={<SettingsPage />} />
                 <Route path="/caixa" element={<CashRegisterPage />} />
+                <Route path="/variacoes" element={<VariationPage />} />
               </Route>
             </Route>
             <Route path="*" element={<NotFound />} />

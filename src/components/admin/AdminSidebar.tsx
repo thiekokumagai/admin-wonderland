@@ -10,6 +10,7 @@ import {
   CreditCard,
   Settings,
   Landmark,
+  SlidersHorizontal,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -50,6 +51,7 @@ const menuItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Pedidos", url: "/pedidos", icon: ShoppingBag },
   { title: "Produtos", url: "/produtos", icon: Package },
+  { title: "Variações", url: "/variacoes", icon: SlidersHorizontal },
   { title: "Categorias", url: "/categorias", icon: FolderTree },
   { title: "Cupons", url: "/cupons", icon: Ticket },
   { title: "Entregas", url: "/entregas", icon: Truck },
