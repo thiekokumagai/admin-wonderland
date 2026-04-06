@@ -124,11 +124,11 @@ export interface Settings {
 // ========== MOCK DATA — baseados em dados reais do Pode Mais ==========
 
 export const mockCategories: CategoryImage[] = [
-  { id: "cat1", nome: "Pods Descartáveis", imagem: "https://images.unsplash.com/photo-1560913210-7d891e89ae67?w=200&h=200&fit=crop", produtosAtivos: 18, ordem: 1, status: true },
-  { id: "cat2", nome: "Pods Recarregáveis", imagem: "https://images.unsplash.com/photo-1567922045116-2a00fae2ed03?w=200&h=200&fit=crop", produtosAtivos: 12, ordem: 2, status: true },
-  { id: "cat3", nome: "Essências", imagem: "https://images.unsplash.com/photo-1527661591475-527312dd65f5?w=200&h=200&fit=crop", produtosAtivos: 24, ordem: 3, status: true },
-  { id: "cat4", nome: "Acessórios", imagem: "https://images.unsplash.com/photo-1586953208270-767889fa9b0e?w=200&h=200&fit=crop", produtosAtivos: 8, ordem: 4, status: true },
-  { id: "cat5", nome: "Combos", imagem: "", produtosAtivos: 5, ordem: 5, status: false },
+  { id: "cat1", title: "Pods Descartáveis", image: "https://images.unsplash.com/photo-1560913210-7d891e89ae67?w=200&h=200&fit=crop", produtosAtivos: 18, ordem: 1, status: true },
+  { id: "cat2", title: "Pods Recarregáveis", image: "https://images.unsplash.com/photo-1567922045116-2a00fae2ed03?w=200&h=200&fit=crop", produtosAtivos: 12, ordem: 2, status: true },
+  { id: "cat3", title: "Essências", image: "https://images.unsplash.com/photo-1527661591475-527312dd65f5?w=200&h=200&fit=crop", produtosAtivos: 24, ordem: 3, status: true },
+  { id: "cat4", title: "Acessórios", image: "https://images.unsplash.com/photo-1586953208270-767889fa9b0e?w=200&h=200&fit=crop", produtosAtivos: 8, ordem: 4, status: true },
+  { id: "cat5", title: "Combos", image: "", produtosAtivos: 5, ordem: 5, status: false },
 ];
 
 export const mockProducts: Product[] = [

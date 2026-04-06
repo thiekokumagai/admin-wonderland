@@ -63,7 +63,7 @@ export default function ProductsPage() {
     setForm((prev) => ({
       ...prev,
       categorias: [catId],
-      categorias_nomes: [cat.nome],
+      categorias_nomes: [cat.title],
     }));
   };
 
@@ -135,7 +135,7 @@ export default function ProductsPage() {
   };
 
   const getCategoryName = (ids: string[]) => {
-    return ids.map((id) => mockCategories.find((c) => c.id === id)?.nome).filter(Boolean).join(", ") || "—";
+    return ids.map((id) => mockCategories.find((c) => c.id === id)?.title).filter(Boolean).join(", ") || "—";
   };
 
   const totalVariations = (p: Product) => p.variacoes.reduce((s, v) => s + v.options.length, 0);
@@ -249,8 +249,9 @@ export default function ProductsPage() {
                     <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
                     <SelectContent>
                       {mockCategories.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
+                        <SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>
                       ))}
+
                     </SelectContent>
                   </Select>
                 </div>
