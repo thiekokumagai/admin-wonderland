@@ -4,6 +4,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AdminLayout } from "@/components/admin/AdminLayout";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 
 const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
 const OrdersPage = lazy(() => import("@/pages/OrdersPage"));
@@ -14,6 +15,7 @@ const DeliveriesPage = lazy(() => import("@/pages/DeliveriesPage"));
 const PaymentsPage = lazy(() => import("@/pages/PaymentsPage"));
 const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
 const CashRegisterPage = lazy(() => import("@/pages/CashRegisterPage"));
+const LoginPage = lazy(() => import("@/pages/LoginPage"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
 function RouteFallback() {
@@ -39,16 +41,19 @@ const App = () => (
       <BrowserRouter>
         <Suspense fallback={<RouteFallback />}>
           <Routes>
-            <Route element={<AdminLayout />}>
-              <Route path="/" element={<DashboardPage />} />
-              <Route path="/pedidos" element={<OrdersPage />} />
-              <Route path="/produtos" element={<ProductsPage />} />
-              <Route path="/categorias" element={<CategoriesPage />} />
-              <Route path="/cupons" element={<CouponsPage />} />
-              <Route path="/entregas" element={<DeliveriesPage />} />
-              <Route path="/pagamentos" element={<PaymentsPage />} />
-              <Route path="/configuracoes" element={<SettingsPage />} />
-              <Route path="/caixa" element={<CashRegisterPage />} />
+            <Route path="/login" element={<LoginPage />} />
+            <Route element={<ProtectedRoute />}>
+              <Route element={<AdminLayout />}>
+                <Route path="/" element={<DashboardPage />} />
+                <Route path="/pedidos" element={<OrdersPage />} />
+                <Route path="/produtos" element={<ProductsPage />} />
+                <Route path="/categorias" element={<CategoriesPage />} />
+                <Route path="/cupons" element={<CouponsPage />} />
+                <Route path="/entregas" element={<DeliveriesPage />} />
+                <Route path="/pagamentos" element={<PaymentsPage />} />
+                <Route path="/configuracoes" element={<SettingsPage />} />
+                <Route path="/caixa" element={<CashRegisterPage />} />
+              </Route>
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
