@@ -29,7 +29,7 @@ export async function createVariation(payload: VariationFormValues): Promise<Var
     method: "POST",
     body: JSON.stringify({
       title: payload.title,
-      options: payload.options.map((value) => ({ value })),
+      options: payload.options,
     }),
   });
 
@@ -42,7 +42,7 @@ export async function updateVariation(id: string, payload: VariationFormValues):
     method: "PATCH",
     body: JSON.stringify({
       title: payload.title,
-      options: payload.options.map((value) => ({ value })),
+      options: payload.options,
     }),
   });
 
