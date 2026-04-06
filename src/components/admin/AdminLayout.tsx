@@ -3,13 +3,13 @@ import { AdminSidebar } from "./AdminSidebar";
 import { LogOut, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Outlet, useNavigate } from "react-router-dom";
-import { signOut } from "@/lib/auth";
+import { clearSession } from "@/services/auth.service";
 
 export function AdminLayout() {
   const navigate = useNavigate();
 
   const handleLogout = () => {
-    signOut();
+    clearSession();
     navigate("/login", { replace: true });
   };
 

@@ -7,7 +7,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { isAuthenticated, signIn } from "@/lib/auth";
+import { isAuthenticated } from "@/lib/auth";
+import { login, type LoginPayload } from "@/services/auth.service";
+import { toast } from "@/components/ui/use-toast";
 import { Loader2 } from "lucide-react";
 
 type LoginFormValues = z.infer<typeof loginSchema>;
@@ -34,18 +36,26 @@ export default function LoginPage() {
     return <Navigate to="/" replace />;
   }
 
-  const onSubmit = async () => {
+  const onSubmit = async (values: LoginFormValues) => {
     setIsSubmitting(true);
 
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    try {
+      await login(values as LoginPayload);
 
-    signIn();
+      const redirectTo = typeof location.state === "object" && location.state && "from" in location.state
+        ? String((location.state as { from?: string }).from || "/")
+        : "/";
 
-    const redirectTo = typeof location.state === "object" && location.state && "from" in location.state
-      ? String((location.state as { from?: string }).from || "/")
-      : "/";
-
-    navigate(redirectTo, { replace: true });
+      navigate(redirectTo, { replace: true });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Erro ao entrar",
+        description: error instanceof Error ? error.message : "Não foi possível fazer login.",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -57,7 +67,7 @@ export default function LoginPage() {
           </div>
           <div className="space-y-1">
             <CardTitle>Entrar no painel</CardTitle>
-            <CardDescription>Login somente no frontend para acessar o administrativo.</CardDescription>
+            <CardDescription>Use suas credenciais para acessar o administrativo.</CardDescription>
           </div>
         </CardHeader>
         <CardContent>

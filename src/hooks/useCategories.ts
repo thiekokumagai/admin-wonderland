@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { getCategories } from "@/services/category.service";
-import { login } from "@/services/auth.service";
-import type { CategoryList } from "@/types/category"; 
+import type { CategoryList } from "@/types/category";
 
 export function useCategories() {
   const [data, setData] = useState<CategoryList[]>([]);
@@ -11,7 +10,6 @@ export function useCategories() {
     setLoading(true);
 
     try {
-      await login();
       const categories = await getCategories();
       setData(categories);
     } finally {
@@ -20,7 +18,7 @@ export function useCategories() {
   };
 
   useEffect(() => {
-    load();
+    void load();
   }, []);
 
   return {

@@ -1,35 +1,72 @@
+import { clearSession, refreshTokens, restoreAuthSession } from "@/services/auth.service";
+
 let accessToken: string | null = null;
+let refreshPromise: Promise<string> | null = null;
 
 export const setAccessToken = (token: string) => {
   accessToken = token;
 };
 
+export const clearAccessToken = () => {
+  accessToken = null;
+};
+
 export const getAccessToken = () => accessToken;
 
-export async function apiFetch(
-  endpoint: string,
-  options: RequestInit = {}
-) {
-  const headers: HeadersInit = {
-    accept: "application/json",
-    ...(options.body instanceof FormData
-      ? {}
-      : { "Content-Type": "application/json" }),
-    ...options.headers,
-  };
+restoreAuthSession();
 
-  if (accessToken) {
-    headers["Authorization"] = `Bearer ${accessToken}`;
+async function refreshAccessToken() {
+  if (!refreshPromise) {
+    refreshPromise = refreshTokens()
+      .then((session) => session.accessToken)
+      .finally(() => {
+        refreshPromise = null;
+      });
   }
 
-  const response = await fetch(`${import.meta.env.VITE_ADMIN_API}${endpoint}`, {
-    ...options,
-    headers,
-    credentials: "include",
-  });
+  return refreshPromise;
+}
+
+export async function apiFetch(endpoint: string, options: RequestInit = {}) {
+  const makeRequest = async (tokenOverride?: string) => {
+    const headers = new Headers(options.headers ?? undefined);
+
+    if (!headers.has("accept")) {
+      headers.set("accept", "application/json");
+    }
+
+    if (!(options.body instanceof FormData) && !headers.has("Content-Type")) {
+      headers.set("Content-Type", "application/json");
+    }
+
+    const token = tokenOverride ?? accessToken;
+
+    if (token) {
+      headers.set("Authorization", `Bearer ${token}`);
+    }
+
+    return fetch(`${import.meta.env.VITE_ADMIN_API}${endpoint}`, {
+      ...options,
+      headers,
+      credentials: "include",
+    });
+  };
+
+  let response = await makeRequest();
+
+  if (response.status === 401) {
+    try {
+      const nextAccessToken = await refreshAccessToken();
+      response = await makeRequest(nextAccessToken);
+    } catch {
+      clearSession();
+      throw new Error("Sua sessão expirou. Faça login novamente.");
+    }
+  }
 
   if (!response.ok) {
     throw new Error(`Erro na API: ${response.status}`);
   }
+
   return response;
 }
