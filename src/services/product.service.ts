@@ -39,6 +39,12 @@ function normalizeProductItem(item: ProductItemApiResponse): ProductItem {
   };
 }
 
+export async function getProducts(): Promise<ProductResponse[]> {
+  const response = await apiFetch("/products");
+  const data = (await response.json()) as ProductApiResponse[];
+  return data.map(normalizeProduct);
+}
+
 export async function createProduct(payload: CreateProductPayload): Promise<ProductResponse> {
   const response = await apiFetch("/products", {
     method: "POST",

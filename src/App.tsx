@@ -9,6 +9,7 @@ import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
 const OrdersPage = lazy(() => import("@/pages/OrdersPage"));
 const ProductsPage = lazy(() => import("@/pages/ProductsPage"));
+const ProductDetailsPage = lazy(() => import("@/pages/ProductDetailsPage"));
 const CategoriesPage = lazy(() => import("@/pages/CategoriesPage"));
 const CouponsPage = lazy(() => import("@/pages/CouponsPage"));
 const DeliveriesPage = lazy(() => import("@/pages/DeliveriesPage"));
@@ -16,6 +17,7 @@ const PaymentsPage = lazy(() => import("@/pages/PaymentsPage"));
 const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
 const CashRegisterPage = lazy(() => import("@/pages/CashRegisterPage"));
 const VariationPage = lazy(() => import("@/pages/VariationPage"));
+const VariationDetailsPage = lazy(() => import("@/pages/VariationDetailsPage"));
 const LoginPage = lazy(() => import("@/pages/LoginPage"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
@@ -48,6 +50,7 @@ const App = () => (
                 <Route path="/" element={<DashboardPage />} />
                 <Route path="/pedidos" element={<OrdersPage />} />
                 <Route path="/produtos" element={<ProductsPage />} />
+                <Route path="/produtos/:id" element={<ProductDetailsPage />} />
                 <Route path="/categorias" element={<CategoriesPage />} />
                 <Route path="/cupons" element={<CouponsPage />} />
                 <Route path="/entregas" element={<DeliveriesPage />} />
@@ -55,6 +58,7 @@ const App = () => (
                 <Route path="/configuracoes" element={<SettingsPage />} />
                 <Route path="/caixa" element={<CashRegisterPage />} />
                 <Route path="/variacoes" element={<VariationPage />} />
+                <Route path="/variacoes/:id" element={<VariationDetailsPage />} />
               </Route>
             </Route>
             <Route path="*" element={<NotFound />} />
