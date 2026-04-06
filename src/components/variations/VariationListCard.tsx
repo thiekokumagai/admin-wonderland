@@ -9,13 +9,13 @@ type VariationListCardProps = {
   isLoading: boolean;
 };
 
-export function VariationListCard({ variations, isLoading }: VariationListCardProps) {
+export function VariationListCard({
+  variations,
+  isLoading,
+}: VariationListCardProps) {
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Variações cadastradas</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="space-y-3 mt-4">
         {isLoading ? (
           <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
             Carregando variações...
@@ -36,9 +36,9 @@ export function VariationListCard({ variations, isLoading }: VariationListCardPr
                   <span>{variation.title}</span>
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  {variation.options.map((option) => option.value).join(", ") || "Sem opções"}
+                  {variation.options.map((option) => option.value).join(", ") ||
+                    "Sem opções"}
                 </p>
-                <p className="mt-1 text-xs text-muted-foreground">ID: {variation.id}</p>
               </div>
 
               <Button asChild variant="outline">

@@ -2,18 +2,11 @@ import { useEffect, useState, useRef } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
-import {
-  Card,
-  CardContent,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import {
   Table,
   TableBody,
@@ -58,7 +51,9 @@ export default function CategoriesPage() {
   const { data: categories, loading, reload } = useCategories();
 
   const [localCategories, setLocalCategories] = useState<CategoryList[]>([]);
-  const [editingCategory, setEditingCategory] = useState<CategoryList | null>(null);
+  const [editingCategory, setEditingCategory] = useState<CategoryList | null>(
+    null,
+  );
 
   const [open, setOpen] = useState(false);
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -117,7 +112,7 @@ export default function CategoriesPage() {
         items.map((item, index) => ({
           id: item.id,
           order: index + 1,
-        }))
+        })),
       );
     } finally {
       isSavingOrderRef.current = false;
@@ -125,7 +120,6 @@ export default function CategoriesPage() {
   };
   const handleReorder = (fromId: string, toId: string) => {
     if (fromId === toId) return;
-
     setLocalCategories((prev) => {
       const items = [...prev];
 
@@ -234,7 +228,7 @@ export default function CategoriesPage() {
   };
   const handleDelete = async (id: string) => {
     if (!confirm("Tem certeza que deseja deletar?")) return;
-
+    setLoadingId(id);
     try {
       await deleteCategory(id);
       await reload();
@@ -245,8 +239,11 @@ export default function CategoriesPage() {
         variant: "destructive",
         title: "Erro ao deletar categoria",
       });
+    } finally {
+      setLoadingId(null);
     }
   };
+  const [loadingId, setLoadingId] = useState<string | null>(null);
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -281,7 +278,12 @@ export default function CategoriesPage() {
         </div>
       </div>
 
-      <Card>
+      <Card className="relative">
+        {loading && (
+          <div className="absolute inset-0 bg-white/60 backdrop-blur-sm flex items-center justify-center z-10">
+            <Loader2 className="h-6 w-6 animate-spin" />
+          </div>
+        )}
         <CardContent className="p-0">
           {loading ? (
             <div className="p-6 space-y-3">
@@ -339,17 +341,25 @@ export default function CategoriesPage() {
                     </TableCell>
 
                     <TableCell>
-                      <Button size="icon" variant="ghost" onClick={() => openEdit(c)}>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => openEdit(c)}
+                      >
                         <Pencil className="h-4 w-4" />
                       </Button>
-
                       <Button
                         size="icon"
                         variant="ghost"
                         onClick={() => handleDelete(c.id)}
                         className="text-destructive"
+                        disabled={loadingId === c.id}
                       >
-                        <Trash2 className="h-4 w-4" />
+                        {loadingId === c.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-4 w-4" />
+                        )}
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -367,7 +377,7 @@ export default function CategoriesPage() {
           </DialogTitle>
 
           <div className="space-y-4">
-          <div className="flex justify-center">
+            <div className="flex justify-center">
               {imagePreview ? (
                 <div className="relative">
                   <img
