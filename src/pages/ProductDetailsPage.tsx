@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowLeft, ImagePlus, Package2, Save, Shapes, Trash2 } from "lucide-react";
+import { ArrowLeft, ImagePlus, Package2, Plus, Save, Shapes, Trash2 } from "lucide-react";
 import { useCategories } from "@/hooks/useCategories";
 import { useProductItems } from "@/hooks/useProductItems";
 import { useProducts } from "@/hooks/useProducts";
@@ -49,8 +49,22 @@ type DraftItem = {
   stock: number;
 };
 
+type QuickEditMode = "add" | "subtract" | "replace";
+
 function buildOptionHash(optionIds: string[]) {
   return [...optionIds].sort().join("|");
+}
+
+function getNextStock(currentStock: number, value: number, mode: QuickEditMode) {
+  if (mode === "add") {
+    return currentStock + value;
+  }
+
+  if (mode === "subtract") {
+    return Math.max(0, currentStock - value);
+  }
+
+  return value;
 }
 
 export default function ProductDetailsPage() {
@@ -72,6 +86,9 @@ export default function ProductDetailsPage() {
   const [pendingImages, setPendingImages] = useState<PendingImage[]>([]);
   const [draftItems, setDraftItems] = useState<DraftItem[]>([]);
   const [stockDraftByHash, setStockDraftByHash] = useState<Record<string, string>>({});
+  const [quickEditItemId, setQuickEditItemId] = useState<string | null>(null);
+  const [quickEditMode, setQuickEditMode] = useState<QuickEditMode>("add");
+  const [quickEditValue, setQuickEditValue] = useState("");
 
   const productForm = useForm<ProductDetailsFormValues>({
     resolver: zodResolver(productSchema),
@@ -97,8 +114,8 @@ export default function ProductDetailsPage() {
       setProductId(product.id);
       setImages(product.images);
       setSelectedVariationIds(product.variationIds);
-      toast({ title: "Produto criado" });
       navigate(`/produtos/${product.id}`, { replace: true });
+      toast({ title: "Produto criado" });
     },
     onError: () => {
       toast({ variant: "destructive", title: "Não foi possível criar o produto" });
@@ -180,14 +197,16 @@ export default function ProductDetailsPage() {
     },
   });
 
-  const removeSavedItemMutation = useMutation({
-    mutationFn: ({ itemId }: { itemId: string }) => updateProductItem(itemId, { stock: 0 }),
+  const updateItemMutation = useMutation({
+    mutationFn: ({ itemId, stock }: { itemId: string; stock: number }) => updateProductItem(itemId, { stock }),
     onSuccess: async () => {
       await refetchItems();
-      toast({ title: "Estoque do item atualizado para 0" });
+      setQuickEditItemId(null);
+      setQuickEditValue("");
+      toast({ title: "Estoque atualizado" });
     },
     onError: () => {
-      toast({ variant: "destructive", title: "Não foi possível atualizar o item" });
+      toast({ variant: "destructive", title: "Não foi possível atualizar o estoque" });
     },
   });
 
@@ -202,15 +221,6 @@ export default function ProductDetailsPage() {
       pendingImages.forEach((image) => URL.revokeObjectURL(image.previewUrl));
     };
   }, [pendingImages]);
-
-  const handleSaveProduct = (values: ProductDetailsFormValues) => {
-    if (productId) {
-      toast({ title: "Os dados principais já estão criados para este produto." });
-      return;
-    }
-
-    createProductMutation.mutate(values);
-  };
 
   const handlePendingImagesChange = (files: File[]) => {
     setPendingImages((previous) => {
@@ -234,21 +244,36 @@ export default function ProductDetailsPage() {
     });
   };
 
-  const handleUploadImages = () => {
+  const handleSaveProductSection = async () => {
+    const values = await productForm.trigger();
+    if (!values) {
+      return;
+    }
+
+    const formValues = productForm.getValues();
+
     if (!productId) {
-      toast({ variant: "destructive", title: "Crie o produto antes de enviar imagens" });
+      createProductMutation.mutate(formValues, {
+        onSuccess: (product) => {
+          if (pendingImages.length > 0) {
+            uploadImagesMutation.mutate({
+              currentProductId: product.id,
+              files: pendingImages.map((image) => image.file),
+            });
+          }
+        },
+      });
       return;
     }
 
-    if (pendingImages.length === 0) {
-      toast({ variant: "destructive", title: "Selecione ao menos uma imagem" });
-      return;
+    if (pendingImages.length > 0) {
+      uploadImagesMutation.mutate({
+        currentProductId: productId,
+        files: pendingImages.map((image) => image.file),
+      });
+    } else {
+      toast({ title: "Nada novo para salvar em imagens" });
     }
-
-    uploadImagesMutation.mutate({
-      currentProductId: productId,
-      files: pendingImages.map((image) => image.file),
-    });
   };
 
   const handleToggleVariation = (variationId: string, checked: boolean) => {
@@ -315,7 +340,7 @@ export default function ProductDetailsPage() {
 
     const labels = selectedVariations.map((variation) => {
       const option = variation.options.find((item) => item.id === selectedOptionsByVariation[variation.id]);
-      return `${variation.title}: ${option?.value ?? ""}`;
+      return option?.value ?? "";
     });
 
     if (draftItems.some((item) => buildOptionHash(item.optionIds) === hash)) {
@@ -355,10 +380,19 @@ export default function ProductDetailsPage() {
     saveItemsMutation.mutate({ currentProductId: productId, items });
   };
 
-  const renderSavedItemLabel = (item: ProductItem) =>
-    item.options
-      .map((option) => `${option.variationTitle ?? "Variação"}: ${option.optionValue}`)
-      .join(" / ");
+  const handleApplyQuickEdit = (item: ProductItem) => {
+    const value = Number(quickEditValue);
+
+    if (!Number.isInteger(value) || value < 0) {
+      toast({ variant: "destructive", title: "Informe uma quantidade válida" });
+      return;
+    }
+
+    const nextStock = getNextStock(item.stock, value, quickEditMode);
+    updateItemMutation.mutate({ itemId: item.id, stock: nextStock });
+  };
+
+  const renderSavedItemLabel = (item: ProductItem) => item.options.map((option) => option.optionValue).join(" / ");
 
   return (
     <div className="space-y-6">
@@ -372,13 +406,13 @@ export default function ProductDetailsPage() {
           </Button>
           <h1 className="text-2xl font-bold">{isNewProduct ? "Novo produto" : currentProduct?.title ?? "Editar produto"}</h1>
           <p className="text-sm text-muted-foreground">
-            Layout inspirado na referência, com produto, variações e estoque organizados por etapa.
+            Cadastro com salvamento único para dados e imagens, mais edição rápida de estoque.
           </p>
         </div>
 
         <div className="flex flex-wrap gap-2">
           <div className="rounded-2xl bg-muted px-4 py-2 text-sm text-muted-foreground">
-            {images.length} foto(s)
+            {images.length + pendingImages.length} foto(s)
           </div>
           <div className="rounded-2xl bg-muted px-4 py-2 text-sm text-muted-foreground">
             {savedItems.length} SKU(s)
@@ -408,7 +442,7 @@ export default function ProductDetailsPage() {
               <ProductDetailsForm
                 form={productForm}
                 categories={categories}
-                onSubmit={handleSaveProduct}
+                onSubmit={() => undefined}
                 isSaving={createProductMutation.isPending || loadProductMutation.isPending}
                 productId={productId}
               />
@@ -428,7 +462,7 @@ export default function ProductDetailsPage() {
                   </div>
                   <div className="rounded-2xl bg-card p-4">
                     <p className="text-sm text-muted-foreground">Imagens</p>
-                    <p className="mt-1 font-medium">{images.length} enviadas</p>
+                    <p className="mt-1 font-medium">{images.length + pendingImages.length} no total</p>
                   </div>
                   <div className="rounded-2xl bg-card p-4">
                     <p className="text-sm text-muted-foreground">Variações</p>
@@ -439,16 +473,15 @@ export default function ProductDetailsPage() {
 
               <Card className="rounded-3xl border-0 bg-muted/20 shadow-none">
                 <CardHeader>
-                  <CardTitle className="text-lg">Ações</CardTitle>
+                  <CardTitle className="text-lg">Salvar seção</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  <Button type="button" className="w-full rounded-xl" onClick={productForm.handleSubmit(handleSaveProduct)}>
-                    Salvar produto
+                  <Button type="button" className="w-full rounded-xl" onClick={() => void handleSaveProductSection()}>
+                    Salvar título, categoria e imagens
                   </Button>
-                  <Button type="button" variant="outline" className="w-full rounded-xl" disabled={!productId}>
-                    <ImagePlus className="mr-2 h-4 w-4" />
-                    Produto pronto para receber imagens
-                  </Button>
+                  <p className="text-xs text-muted-foreground">
+                    Um único botão salva o produto e também envia as imagens pendentes.
+                  </p>
                 </CardContent>
               </Card>
             </div>
@@ -459,10 +492,10 @@ export default function ProductDetailsPage() {
             pendingImages={pendingImages}
             isUploading={uploadImagesMutation.isPending}
             isDeletingImage={deleteImageMutation.isPending}
-            canUpload={!!productId && pendingImages.length > 0}
+            canUpload={false}
             onPendingImagesChange={handlePendingImagesChange}
             onRemovePendingImage={handleRemovePendingImage}
-            onUpload={handleUploadImages}
+            onUpload={() => undefined}
             onDeleteImage={(imageId) => {
               if (!productId) {
                 return;
@@ -630,22 +663,79 @@ export default function ProductDetailsPage() {
                           Nenhum item salvo ainda.
                         </div>
                       ) : (
-                        savedItems.map((item) => (
-                          <div key={item.id} className="flex items-center justify-between rounded-2xl bg-card p-4">
-                            <div>
-                              <p className="font-medium">{renderSavedItemLabel(item)}</p>
-                              <p className="text-sm text-muted-foreground">Qtde: {item.stock}</p>
+                        savedItems.map((item) => {
+                          const isEditing = quickEditItemId === item.id;
+                          const previewStock = quickEditValue === "" ? item.stock : getNextStock(item.stock, Number(quickEditValue || 0), quickEditMode);
+
+                          return (
+                            <div key={item.id} className="rounded-2xl bg-card p-4 space-y-3">
+                              <div className="flex items-center justify-between gap-4">
+                                <div>
+                                  <p className="font-medium">{renderSavedItemLabel(item)}</p>
+                                  <p className="text-sm text-muted-foreground">Estoque atual: {item.stock}</p>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                  {!isEditing ? (
+                                    <Button type="button" variant="outline" size="sm" className="rounded-full" onClick={() => {
+                                      setQuickEditItemId(item.id);
+                                      setQuickEditMode("add");
+                                      setQuickEditValue("");
+                                    }}>
+                                      <Plus className="mr-1 h-4 w-4" />
+                                      Mais ou menos
+                                    </Button>
+                                  ) : null}
+                                </div>
+                              </div>
+
+                              {isEditing ? (
+                                <div className="space-y-3 rounded-2xl border border-dashed p-4">
+                                  <div className="flex flex-wrap gap-2">
+                                    <Button type="button" size="sm" variant={quickEditMode === "add" ? "default" : "outline"} onClick={() => setQuickEditMode("add")}>
+                                      Somar
+                                    </Button>
+                                    <Button type="button" size="sm" variant={quickEditMode === "subtract" ? "default" : "outline"} onClick={() => setQuickEditMode("subtract")}>
+                                      Subtrair
+                                    </Button>
+                                    <Button type="button" size="sm" variant={quickEditMode === "replace" ? "default" : "outline"} onClick={() => setQuickEditMode("replace")}>
+                                      Substituir
+                                    </Button>
+                                  </div>
+
+                                  <div className="grid gap-3 md:grid-cols-[180px_1fr_auto] md:items-end">
+                                    <div className="space-y-2">
+                                      <Label>Quantidade</Label>
+                                      <Input
+                                        type="number"
+                                        min="0"
+                                        value={quickEditValue}
+                                        onChange={(event) => setQuickEditValue(event.target.value)}
+                                        placeholder="0"
+                                      />
+                                    </div>
+
+                                    <div className="rounded-2xl bg-muted px-4 py-3 text-sm text-muted-foreground">
+                                      Resultado previsto: <span className="font-medium text-foreground">{Number.isNaN(previewStock) ? item.stock : previewStock}</span>
+                                    </div>
+
+                                    <div className="flex gap-2">
+                                      <Button type="button" variant="outline" onClick={() => {
+                                        setQuickEditItemId(null);
+                                        setQuickEditValue("");
+                                      }}>
+                                        Cancelar
+                                      </Button>
+                                      <Button type="button" onClick={() => handleApplyQuickEdit(item)} disabled={updateItemMutation.isPending}>
+                                        Salvar
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </div>
+                              ) : null}
                             </div>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => removeSavedItemMutation.mutate({ itemId: item.id })}
-                            >
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          </div>
-                        ))
+                          );
+                        })
                       )}
                     </div>
                   </div>

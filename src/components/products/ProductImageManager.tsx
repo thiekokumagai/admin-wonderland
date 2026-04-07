@@ -138,10 +138,12 @@ export function ProductImageManager({
             <ImagePlus className="mr-2 h-4 w-4" />
             Selecionar imagens
           </Button>
-          <Button type="button" onClick={onUpload} disabled={!canUpload || isUploading}>
-            <Upload className="mr-2 h-4 w-4" />
-            Enviar imagens
-          </Button>
+          {canUpload ? (
+            <Button type="button" onClick={onUpload} disabled={isUploading}>
+              <Upload className="mr-2 h-4 w-4" />
+              Enviar imagens
+            </Button>
+          ) : null}
         </div>
 
         {pendingImages.length > 0 ? (
