@@ -1,24 +1,29 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm, useFieldArray } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowLeft, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Loader2, Plus, Trash2 } from "lucide-react";
 import { useVariations } from "@/hooks/useVariations";
-import { createVariation, deleteVariation, updateVariation } from "@/services/variation.service";
+import { createVariation, deleteVariation, updateVariation, updateVariationOrderBatch } from "@/services/variation.service";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { toast } from "@/components/ui/use-toast";
 import type { VariationFormValues } from "@/types/variation";
-
+import { GripVertical } from "lucide-react";
+type OptionItem = {
+  id?: string; 
+  value?: string;
+};
 const variationSchema = z.object({
   title: z.string().min(1, "Informe o nome da variação."),
   options: z
     .array(
       z.object({
+        id: z.string().optional(), 
         value: z.string().min(1, "A opção não pode ficar vazia."),
       }),
     )
@@ -39,15 +44,18 @@ export default function VariationDetailsPage() {
   const isNewVariation = id === "nova";
 
   const variationsQuery = useVariations();
-  const variations = variationsQuery.data ?? [];
   const [loaded, setLoaded] = useState(false);
 
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [isSavingOrder, setIsSavingOrder] = useState(false);
+  const saveTimeout = useRef<NodeJS.Timeout | null>(null);
+  const isSavingOrderRef = useRef(false);
   const form = useForm<VariationFormSchema>({
     resolver: zodResolver(variationSchema),
     defaultValues,
   });
 
-  const { fields, append, remove, replace } = useFieldArray({
+  const { fields, append, remove, replace, move } = useFieldArray({
     control: form.control,
     name: "options",
   });
@@ -60,16 +68,16 @@ export default function VariationDetailsPage() {
       return;
     }
 
-    const variation = variations.find((item) => item.id === id);
+    const variation = (variationsQuery.data ?? []).find((item) => item.id === id);
 
     if (variation) {
       form.reset({
         title: variation.title,
-        options: variation.options.length > 0 ? variation.options.map((option) => ({ value: option.value })) : [{ value: "" }],
+        options: variation.options.length > 0 ? variation.options.map((option) => ({ id: option.id,value: option.value })) : [{ value: "" }],
       });
       setLoaded(true);
     }
-  }, [form, id, isNewVariation, replace, variations]);
+  }, [form, id, isNewVariation, replace, variationsQuery.data]);
 
   const saveMutation = useMutation({
     mutationFn: async (values: VariationFormSchema) => {
@@ -114,7 +122,41 @@ export default function VariationDetailsPage() {
       });
     },
   });
+  const saveOrder = async (options: OptionItem[]) => {
+    if (isSavingOrderRef.current) return;
+  
+    isSavingOrderRef.current = true;
+    setIsSavingOrder(true);
+  
+    try {
+      await updateVariationOrderBatch(
+        options
+          .filter((item) => item.id)
+          .map((item, index) => ({
+            id: item.id!,
+            order: index + 1,
+          })),
+      );
+    } finally {
+      isSavingOrderRef.current = false;
+      setIsSavingOrder(false);
+    }
+  };
 
+  const handleReorder = (fromId: string, toId: string) => {
+    const fromIndex = fields.findIndex((item) => item.id === fromId);
+    const toIndex = fields.findIndex((item) => item.id === toId);
+  
+    if (fromIndex === -1 || toIndex === -1) return;
+
+    move(fromIndex, toIndex);
+  
+    if (saveTimeout.current) clearTimeout(saveTimeout.current);
+  
+    saveTimeout.current = setTimeout(() => {
+      saveOrder(form.getValues("options"));
+    }, 300);
+  };
   return (
     <div className="space-y-6">
       <div>
@@ -158,7 +200,15 @@ export default function VariationDetailsPage() {
 
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <FormLabel>Opções</FormLabel>
+                    <div className="flex items-center gap-2">
+                      <FormLabel>Opções</FormLabel>
+                      {isSavingOrder ? (
+                        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          Salvando ordem...
+                        </span>
+                      ) : null}
+                    </div>
                     <Button type="button" variant="outline" size="sm" onClick={() => append({ value: "" })}>
                       <Plus className="mr-1 h-4 w-4" />
                       Adicionar opção
@@ -166,38 +216,55 @@ export default function VariationDetailsPage() {
                   </div>
 
                   {fields.map((field, index) => (
-                    <FormField
+                    <div
                       key={field.id}
-                      control={form.control}
-                      name={`options.${index}.value`}
-                      render={({ field: optionField }) => (
-                        <FormItem>
-                          <div className="flex gap-2">
-                            <FormControl>
-                              <Input placeholder={`Opção ${index + 1}`} {...optionField} />
-                            </FormControl>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="text-destructive"
-                              onClick={() => remove(index)}
-                              disabled={fields.length === 1}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                      draggable={!isSavingOrder}
+                      onDragStart={() => setDraggingId(field.id)}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={() => {
+                        if (draggingId) handleReorder(draggingId, field.id);
+                        setDraggingId(null);
+                      }}
+                      onDragEnd={() => setDraggingId(null)}
+                      className={draggingId === field.id ? "opacity-50" : ""}
+                    >
+                      <FormField
+                        control={form.control}
+                        name={`options.${index}.value`}
+                        render={({ field: optionField }) => (
+                          <FormItem>
+                            <div className="flex gap-2 items-center">
+                              <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab" />
+
+                              <FormControl>
+                                <Input {...optionField} />
+                              </FormControl>
+
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="text-destructive"
+                                onClick={() => remove(index)}
+                                disabled={fields.length === 1}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
                   ))}
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  <Button type="submit" disabled={saveMutation.isPending}>
-                    {isNewVariation ? "Criar variação" : "Salvar alterações"}
-                  </Button>
+                  {isNewVariation || form.formState.dirtyFields.title ? (
+                    <Button type="submit" disabled={saveMutation.isPending}>
+                      {isNewVariation ? "Criar variação" : "Salvar alterações"}
+                    </Button>
+                  ) : null}
 
                   {!isNewVariation ? (
                     <Button

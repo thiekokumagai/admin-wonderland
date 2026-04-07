@@ -55,3 +55,14 @@ export async function deleteVariation(id: string): Promise<void> {
     method: "DELETE",
   });
 }
+
+export async function updateVariationOrderBatch(
+  items: { id: string; order: number }[]
+) {
+  const response = await apiFetch("/variations/batch/order", {
+    method: "PATCH",
+    body: JSON.stringify({ items }),
+  });
+
+  return response.json();
+}

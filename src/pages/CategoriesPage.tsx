@@ -85,6 +85,13 @@ export default function CategoriesPage() {
   });
 
   const file = watch("file") as File | null;
+  const watchedTitle = watch("title");
+  const watchedIsVisible = watch("isVisible");
+  const canShowEditButton =
+    !editingCategory ||
+    watchedTitle.trim() !== editingCategory.title.trim() ||
+    watchedIsVisible !== editingCategory.isVisible;
+
   useEffect(() => {
     if (categories) setLocalCategories(categories);
   }, [categories]);
@@ -433,14 +440,16 @@ export default function CategoriesPage() {
               )}
             />
 
-            <Button
-              className="w-full"
-              onClick={handleSubmit(onSubmit)}
-              disabled={isSaving}
-            >
-              {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {editingCategory ? "Editar" : "Criar"}
-            </Button>
+            {canShowEditButton ? (
+              <Button
+                className="w-full"
+                onClick={handleSubmit(onSubmit)}
+                disabled={isSaving}
+              >
+                {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {editingCategory ? "Editar" : "Criar"}
+              </Button>
+            ) : null}
           </div>
         </DialogContent>
       </Dialog>
