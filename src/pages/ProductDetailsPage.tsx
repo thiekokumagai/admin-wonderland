@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowLeft, Trash2 } from "lucide-react";
+import { ArrowLeft, ImagePlus, Package2, Save, Shapes, Trash2 } from "lucide-react";
 import { useCategories } from "@/hooks/useCategories";
 import { useProductItems } from "@/hooks/useProductItems";
 import { useProducts } from "@/hooks/useProducts";
@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/components/ui/use-toast";
 import type { CreateProductItemPayload, ProductImage, ProductItem } from "@/types/product";
 import type { Variation } from "@/types/variation";
@@ -295,6 +296,8 @@ export default function ProductDetailsPage() {
   const canCreateCombination =
     selectedVariations.length > 0 && selectedOptionIds.length === selectedVariations.length;
 
+  const currentCombinationHash = canCreateCombination ? buildOptionHash(selectedOptionIds) : "";
+
   const handleAddDraftItem = () => {
     if (!canCreateCombination) {
       toast({ variant: "destructive", title: "Escolha uma opção para cada variação" });
@@ -359,184 +362,299 @@ export default function ProductDetailsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <Button asChild variant="ghost" className="mb-2 -ml-3">
+      <div className="flex flex-col gap-4 rounded-3xl border bg-card p-6 sm:flex-row sm:items-center sm:justify-between">
+        <div className="space-y-1">
+          <Button asChild variant="ghost" className="-ml-3 w-fit">
             <Link to="/produtos">
               <ArrowLeft className="mr-2 h-4 w-4" />
               Voltar para produtos
             </Link>
           </Button>
-          <h1 className="text-2xl font-bold">{isNewProduct ? "Novo produto" : currentProduct?.title ?? "Produto"}</h1>
+          <h1 className="text-2xl font-bold">{isNewProduct ? "Novo produto" : currentProduct?.title ?? "Editar produto"}</h1>
           <p className="text-sm text-muted-foreground">
-            Cadastre produto, envie múltiplas fotos com crop e defina estoque por variação.
+            Layout inspirado na referência, com produto, variações e estoque organizados por etapa.
           </p>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <div className="rounded-2xl bg-muted px-4 py-2 text-sm text-muted-foreground">
+            {images.length} foto(s)
+          </div>
+          <div className="rounded-2xl bg-muted px-4 py-2 text-sm text-muted-foreground">
+            {savedItems.length} SKU(s)
+          </div>
         </div>
       </div>
 
-      <ProductDetailsForm
-        form={productForm}
-        categories={categories}
-        onSubmit={handleSaveProduct}
-        isSaving={createProductMutation.isPending || loadProductMutation.isPending}
-        productId={productId}
-      />
+      <Tabs defaultValue="produto" className="space-y-6">
+        <TabsList className="h-auto rounded-2xl bg-muted/40 p-1">
+          <TabsTrigger value="produto" className="rounded-xl px-5 py-2 data-[state=active]:bg-background">
+            <Package2 className="mr-2 h-4 w-4" />
+            Produto
+          </TabsTrigger>
+          <TabsTrigger value="variacoes" className="rounded-xl px-5 py-2 data-[state=active]:bg-background">
+            <Shapes className="mr-2 h-4 w-4" />
+            Variações
+          </TabsTrigger>
+          <TabsTrigger value="estoque" className="rounded-xl px-5 py-2 data-[state=active]:bg-background">
+            <Save className="mr-2 h-4 w-4" />
+            Estoque
+          </TabsTrigger>
+        </TabsList>
 
-      <ProductImageManager
-        images={images}
-        pendingImages={pendingImages}
-        isUploading={uploadImagesMutation.isPending}
-        isDeletingImage={deleteImageMutation.isPending}
-        canUpload={!!productId && pendingImages.length > 0}
-        onPendingImagesChange={handlePendingImagesChange}
-        onRemovePendingImage={handleRemovePendingImage}
-        onUpload={handleUploadImages}
-        onDeleteImage={(imageId) => {
-          if (!productId) {
-            return;
-          }
-          deleteImageMutation.mutate({ currentProductId: productId, imageId });
-        }}
-      />
-
-      <ProductVariationSelector
-        variations={variations}
-        selectedVariationIds={selectedVariationIds}
-        onToggle={handleToggleVariation}
-        onSave={handleSaveVariationLinks}
-        isSaving={linkVariationsMutation.isPending}
-        disabled={!productId}
-      />
-
-      <Card>
-        <CardHeader>
-          <CardTitle>4. Estoque por variação</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {!productId ? (
-            <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
-              Crie o produto antes de configurar o estoque.
+        <TabsContent value="produto" className="space-y-6">
+          <div className="grid gap-6 xl:grid-cols-[1.1fr_1fr]">
+            <div className="space-y-6">
+              <ProductDetailsForm
+                form={productForm}
+                categories={categories}
+                onSubmit={handleSaveProduct}
+                isSaving={createProductMutation.isPending || loadProductMutation.isPending}
+                productId={productId}
+              />
             </div>
-          ) : selectedVariations.length === 0 ? (
-            <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
-              Se o produto tiver variação, vincule as variações acima.
-            </div>
-          ) : (
-            <>
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                {selectedVariations.map((variation) => (
-                  <div key={variation.id} className="rounded-xl border p-4 space-y-3">
-                    <Label>{variation.title}</Label>
-                    <div className="space-y-2">
-                      {variation.options.map((option) => {
-                        const checked = selectedOptionsByVariation[variation.id] === option.id;
-                        return (
-                          <button
-                            key={option.id}
-                            type="button"
-                            onClick={() => handleSelectVariationOption(variation.id, option.id)}
-                            className={`w-full rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
-                              checked ? "border-primary bg-primary/5" : "hover:bg-muted"
-                            }`}
-                          >
-                            {option.value}
-                          </button>
-                        );
-                      })}
-                    </div>
+
+            <div className="space-y-6">
+              <Card className="rounded-3xl border-0 bg-muted/20 shadow-none">
+                <CardHeader>
+                  <CardTitle className="text-lg">Resumo rápido</CardTitle>
+                </CardHeader>
+                <CardContent className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
+                  <div className="rounded-2xl bg-card p-4">
+                    <p className="text-sm text-muted-foreground">Categoria</p>
+                    <p className="mt-1 font-medium">
+                      {categories.find((category) => category.id === productForm.watch("categoryId"))?.title ?? "Não selecionada"}
+                    </p>
                   </div>
-                ))}
-              </div>
+                  <div className="rounded-2xl bg-card p-4">
+                    <p className="text-sm text-muted-foreground">Imagens</p>
+                    <p className="mt-1 font-medium">{images.length} enviadas</p>
+                  </div>
+                  <div className="rounded-2xl bg-card p-4">
+                    <p className="text-sm text-muted-foreground">Variações</p>
+                    <p className="mt-1 font-medium">{selectedVariationIds.length} vinculadas</p>
+                  </div>
+                </CardContent>
+              </Card>
 
-              <div className="grid gap-4 md:grid-cols-[1fr_auto] items-end">
-                <div className="space-y-2">
-                  <Label>Quantidade em estoque da combinação</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    value={stockDraftByHash[buildOptionHash(selectedOptionIds)] ?? ""}
-                    onChange={(event) =>
-                      setStockDraftByHash((prev) => ({
-                        ...prev,
-                        [buildOptionHash(selectedOptionIds)]: event.target.value,
-                      }))
-                    }
-                    placeholder="0"
-                    disabled={!canCreateCombination}
-                  />
-                </div>
-                <Button type="button" onClick={handleAddDraftItem} disabled={!canCreateCombination}>
-                  Adicionar combinação
-                </Button>
-              </div>
+              <Card className="rounded-3xl border-0 bg-muted/20 shadow-none">
+                <CardHeader>
+                  <CardTitle className="text-lg">Ações</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <Button type="button" className="w-full rounded-xl" onClick={productForm.handleSubmit(handleSaveProduct)}>
+                    Salvar produto
+                  </Button>
+                  <Button type="button" variant="outline" className="w-full rounded-xl" disabled={!productId}>
+                    <ImagePlus className="mr-2 h-4 w-4" />
+                    Produto pronto para receber imagens
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
 
-              <div className="grid gap-6 xl:grid-cols-2">
-                <div className="space-y-3">
-                  <h3 className="font-semibold">Combinações prontas para salvar</h3>
-                  {draftItems.length === 0 ? (
-                    <div className="rounded-lg border border-dashed p-5 text-sm text-muted-foreground">
-                      Nenhuma combinação adicionada ainda.
+          <ProductImageManager
+            images={images}
+            pendingImages={pendingImages}
+            isUploading={uploadImagesMutation.isPending}
+            isDeletingImage={deleteImageMutation.isPending}
+            canUpload={!!productId && pendingImages.length > 0}
+            onPendingImagesChange={handlePendingImagesChange}
+            onRemovePendingImage={handleRemovePendingImage}
+            onUpload={handleUploadImages}
+            onDeleteImage={(imageId) => {
+              if (!productId) {
+                return;
+              }
+              deleteImageMutation.mutate({ currentProductId: productId, imageId });
+            }}
+          />
+        </TabsContent>
+
+        <TabsContent value="variacoes" className="space-y-6">
+          <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
+            <ProductVariationSelector
+              variations={variations}
+              selectedVariationIds={selectedVariationIds}
+              onToggle={handleToggleVariation}
+              onSave={handleSaveVariationLinks}
+              isSaving={linkVariationsMutation.isPending}
+              disabled={!productId}
+            />
+
+            <Card className="rounded-3xl border-0 bg-muted/20 shadow-none">
+              <CardHeader>
+                <CardTitle className="text-lg">Variações escolhidas</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {selectedVariations.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed p-5 text-sm text-muted-foreground">
+                    Nenhuma variação selecionada.
+                  </div>
+                ) : (
+                  selectedVariations.map((variation) => (
+                    <div key={variation.id} className="rounded-2xl bg-card p-4">
+                      <p className="font-medium">{variation.title}</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {variation.options.map((option) => option.value).join(", ")}
+                      </p>
                     </div>
-                  ) : (
-                    draftItems.map((item) => (
-                      <div key={item.id} className="flex items-center justify-between rounded-xl border p-4">
-                        <div>
-                          <p className="font-medium">{item.labels.join(" / ")}</p>
-                          <p className="text-sm text-muted-foreground">Estoque: {item.stock}</p>
-                        </div>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => setDraftItems((prev) => prev.filter((draft) => draft.id !== item.id))}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </div>
-                    ))
-                  )}
+                  ))
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
 
-                  <div className="flex justify-end">
-                    <Button type="button" onClick={handleSaveAllItems} disabled={draftItems.length === 0 || saveItemsMutation.isPending}>
-                      Salvar combinações
+        <TabsContent value="estoque" className="space-y-6">
+          <Card className="rounded-3xl border-0 bg-muted/20 shadow-none">
+            <CardHeader>
+              <CardTitle className="text-lg">Estoque por combinação</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {!productId ? (
+                <div className="rounded-2xl border border-dashed p-6 text-sm text-muted-foreground">
+                  Crie o produto antes de configurar o estoque.
+                </div>
+              ) : selectedVariations.length === 0 ? (
+                <div className="rounded-2xl border border-dashed p-6 text-sm text-muted-foreground">
+                  Vincule pelo menos uma variação para começar o estoque por combinação.
+                </div>
+              ) : (
+                <>
+                  <div className="grid gap-4 xl:grid-cols-3">
+                    {selectedVariations.map((variation) => (
+                      <div key={variation.id} className="rounded-3xl bg-card p-4">
+                        <p className="mb-3 font-medium">{variation.title}</p>
+                        <div className="space-y-2">
+                          {variation.options.map((option) => {
+                            const active = selectedOptionsByVariation[variation.id] === option.id;
+                            return (
+                              <button
+                                key={option.id}
+                                type="button"
+                                onClick={() => handleSelectVariationOption(variation.id, option.id)}
+                                className={`w-full rounded-2xl border px-3 py-2 text-left text-sm transition-colors ${
+                                  active ? "border-primary bg-primary/10 text-primary" : "hover:bg-muted"
+                                }`}
+                              >
+                                {option.value}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="grid gap-4 rounded-3xl bg-card p-4 md:grid-cols-[1fr_auto] md:items-end">
+                    <div className="space-y-2">
+                      <Label>Quantidade da combinação</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        value={currentCombinationHash ? stockDraftByHash[currentCombinationHash] ?? "" : ""}
+                        onChange={(event) => {
+                          if (!currentCombinationHash) {
+                            return;
+                          }
+                          setStockDraftByHash((prev) => ({
+                            ...prev,
+                            [currentCombinationHash]: event.target.value,
+                          }));
+                        }}
+                        placeholder="0"
+                        disabled={!canCreateCombination}
+                      />
+                    </div>
+                    <Button type="button" onClick={handleAddDraftItem} disabled={!canCreateCombination} className="rounded-xl">
+                      Adicionar combinação
                     </Button>
                   </div>
-                </div>
 
-                <div className="space-y-3">
-                  <h3 className="font-semibold">Itens já salvos</h3>
-                  {loadingSavedItems ? (
-                    <div className="rounded-lg border border-dashed p-5 text-sm text-muted-foreground">
-                      Carregando itens...
-                    </div>
-                  ) : savedItems.length === 0 ? (
-                    <div className="rounded-lg border border-dashed p-5 text-sm text-muted-foreground">
-                      Nenhum item salvo ainda.
-                    </div>
-                  ) : (
-                    savedItems.map((item) => (
-                      <div key={item.id} className="flex items-center justify-between rounded-xl border p-4">
-                        <div>
-                          <p className="font-medium">{renderSavedItemLabel(item)}</p>
-                          <p className="text-sm text-muted-foreground">Estoque: {item.stock}</p>
+                  <div className="grid gap-6 xl:grid-cols-2">
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h3 className="font-semibold">Combinações prontas</h3>
+                        <span className="text-sm text-muted-foreground">{draftItems.length} item(ns)</span>
+                      </div>
+
+                      {draftItems.length === 0 ? (
+                        <div className="rounded-2xl border border-dashed p-5 text-sm text-muted-foreground">
+                          Nenhuma combinação adicionada ainda.
                         </div>
+                      ) : (
+                        draftItems.map((item) => (
+                          <div key={item.id} className="flex items-center justify-between rounded-2xl bg-card p-4">
+                            <div>
+                              <p className="font-medium">{item.labels.join(" / ")}</p>
+                              <p className="text-sm text-muted-foreground">Qtde: {item.stock}</p>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setDraftItems((prev) => prev.filter((draft) => draft.id !== item.id))}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
+                        ))
+                      )}
+
+                      <div className="flex justify-end">
                         <Button
                           type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => removeSavedItemMutation.mutate({ itemId: item.id })}
+                          onClick={handleSaveAllItems}
+                          disabled={draftItems.length === 0 || saveItemsMutation.isPending}
+                          className="rounded-xl"
                         >
-                          <Trash2 className="h-4 w-4 text-destructive" />
+                          Salvar combinações
                         </Button>
                       </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h3 className="font-semibold">Estoque salvo</h3>
+                        <span className="text-sm text-muted-foreground">{savedItems.length} SKU(s)</span>
+                      </div>
+
+                      {loadingSavedItems ? (
+                        <div className="rounded-2xl border border-dashed p-5 text-sm text-muted-foreground">
+                          Carregando itens...
+                        </div>
+                      ) : savedItems.length === 0 ? (
+                        <div className="rounded-2xl border border-dashed p-5 text-sm text-muted-foreground">
+                          Nenhum item salvo ainda.
+                        </div>
+                      ) : (
+                        savedItems.map((item) => (
+                          <div key={item.id} className="flex items-center justify-between rounded-2xl bg-card p-4">
+                            <div>
+                              <p className="font-medium">{renderSavedItemLabel(item)}</p>
+                              <p className="text-sm text-muted-foreground">Qtde: {item.stock}</p>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => removeSavedItemMutation.mutate({ itemId: item.id })}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

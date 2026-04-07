@@ -22,13 +22,13 @@ export function ProductVariationSelector({
   disabled,
 }: ProductVariationSelectorProps) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>2. Vincular Variações</CardTitle>
+    <Card className="rounded-3xl border-0 bg-muted/20 shadow-none">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-lg">Variações</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         {variations.length === 0 ? (
-          <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
+          <div className="rounded-2xl border border-dashed p-6 text-sm text-muted-foreground">
             Nenhuma variação cadastrada ainda.
           </div>
         ) : (
@@ -39,7 +39,9 @@ export function ProductVariationSelector({
               return (
                 <label
                   key={variation.id}
-                  className="flex cursor-pointer items-start gap-3 rounded-xl border bg-card p-4 transition-colors hover:bg-muted/40"
+                  className={`flex cursor-pointer items-start gap-3 rounded-2xl border p-4 transition-colors ${
+                    checked ? "border-primary bg-primary/5" : "bg-card hover:bg-muted/50"
+                  }`}
                 >
                   <Checkbox
                     checked={checked}
@@ -62,7 +64,7 @@ export function ProductVariationSelector({
         )}
 
         <div className="flex justify-end">
-          <Button onClick={onSave} disabled={disabled || isSaving}>
+          <Button onClick={onSave} disabled={disabled || isSaving} className="rounded-xl">
             Salvar variações
           </Button>
         </div>

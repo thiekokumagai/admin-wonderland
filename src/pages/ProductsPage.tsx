@@ -14,15 +14,15 @@ export default function ProductsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+      <div className="flex flex-col gap-4 rounded-3xl border bg-card p-6 sm:flex-row sm:items-center sm:justify-between">
+        <div className="space-y-1">
           <h1 className="text-2xl font-bold">Produtos</h1>
           <p className="text-sm text-muted-foreground">
-            Veja os produtos cadastrados e entre em cada um para editar tudo em uma única tela.
+            Gerencie seus produtos com fotos, categorias e variações em uma visualização mais prática.
           </p>
         </div>
 
-        <Button asChild>
+        <Button asChild className="rounded-xl">
           <Link to="/produtos/novo">
             <Plus className="mr-2 h-4 w-4" />
             Novo produto
