@@ -23,7 +23,7 @@ type ProductStockManagerProps = {
   savedItems: ProductItem[];
   loadingSavedItems: boolean;
   productReady: boolean;
-  onToggleOption: (optionId: string, checked: boolean) => void;
+  onToggleOption: (variationId: string, optionId: string, checked: boolean) => void;
   onStockInputChange: (value: string) => void;
   onAddDraftItem: () => void;
   onRemoveDraftItem: (draftId: string) => void;
@@ -81,7 +81,7 @@ export function ProductStockManager({
                           >
                             <Checkbox
                               checked={checked}
-                              onCheckedChange={(value) => onToggleOption(option.id, !!value)}
+                              onCheckedChange={(value) => onToggleOption(variation.id, option.id, !!value)}
                             />
                             <span>{option.value}</span>
                           </label>
@@ -101,6 +101,9 @@ export function ProductStockManager({
                   onChange={(e) => onStockInputChange(e.target.value)}
                   placeholder="0"
                 />
+                <p className="text-xs text-muted-foreground">
+                  Selecione exatamente uma opção por variação para criar o SKU.
+                </p>
               </div>
 
               <div className="flex items-end">

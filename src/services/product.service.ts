@@ -11,6 +11,7 @@ type ProductApiResponse = {
   id: string;
   title: string;
   categoryId: string;
+  variationIds?: string[];
 };
 
 type ProductItemApiResponse = {
@@ -28,6 +29,7 @@ function normalizeProduct(item: ProductApiResponse): ProductResponse {
     id: item.id,
     title: item.title,
     categoryId: item.categoryId,
+    variationIds: item.variationIds ?? [],
   };
 }
 
@@ -61,6 +63,22 @@ export async function getProductById(id: string): Promise<ProductResponse> {
   return normalizeProduct(data);
 }
 
+export async function updateProduct(id: string, payload: CreateProductPayload): Promise<ProductResponse> {
+  const response = await apiFetch(`/products/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+
+  const data = (await response.json()) as ProductApiResponse;
+  return normalizeProduct(data);
+}
+
+export async function deleteProduct(id: string): Promise<void> {
+  await apiFetch(`/products/${id}`, {
+    method: "DELETE",
+  });
+}
+
 export async function linkProductVariations(productId: string, variationIds: string[]): Promise<void> {
   await apiFetch(`/products/${productId}/variations`, {
     method: "POST",
@@ -89,5 +107,11 @@ export async function updateProductItem(itemId: string, payload: UpdateProductIt
   await apiFetch(`/products/items/${itemId}`, {
     method: "PATCH",
     body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteProductItem(itemId: string): Promise<void> {
+  await apiFetch(`/products/items/${itemId}`, {
+    method: "DELETE",
   });
 }

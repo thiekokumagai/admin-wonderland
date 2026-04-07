@@ -2,6 +2,7 @@ export type ProductResponse = {
   id: string;
   title: string;
   categoryId: string;
+  variationIds: string[];
 };
 
 export type ProductVariationLinkPayload = {

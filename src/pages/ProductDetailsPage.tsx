@@ -1,19 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import { useMutation } from "@tanstack/react-query";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowLeft } from "lucide-react";
 import { useCategories } from "@/hooks/useCategories";
 import { useProductItems } from "@/hooks/useProductItems";
+import { useProducts } from "@/hooks/useProducts";
 import { useVariations } from "@/hooks/useVariations";
 import {
   createProduct,
   createProductItems,
+  deleteProduct,
+  deleteProductItem,
   getProductById,
   linkProductVariations,
-  updateProductItem,
+  updateProduct,
 } from "@/services/product.service";
 import { ProductDetailsForm, type ProductDetailsFormValues } from "@/components/products/ProductDetailsForm";
 import { ProductVariationSelector } from "@/components/products/ProductVariationSelector";
@@ -34,10 +37,13 @@ function buildOptionHash(optionIds: string[]) {
 
 export default function ProductDetailsPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const isNewProduct = id === "novo";
 
   const categoriesQuery = useCategories();
   const categories = categoriesQuery.data ?? [];
+  const productsQuery = useProducts();
   const variationsQuery = useVariations();
   const variations = variationsQuery.data ?? [];
 
@@ -72,8 +78,11 @@ export default function ProductDetailsPage() {
   const createProductMutation = useMutation({
     mutationFn: createProduct,
     onSuccess: (product) => {
+      queryClient.invalidateQueries({ queryKey: ["products"] });
       setProductId(product.id);
+      setSelectedVariationIds(product.variationIds ?? []);
       toast({ title: "Produto salvo com sucesso" });
+      navigate(`/produtos/${product.id}`, { replace: true });
     },
     onError: () => {
       toast({
@@ -83,10 +92,26 @@ export default function ProductDetailsPage() {
     },
   });
 
+  const updateProductMutation = useMutation({
+    mutationFn: ({ productId: currentProductId, values }: { productId: string; values: ProductDetailsFormValues }) =>
+      updateProduct(currentProductId, values),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+      toast({ title: "Dados do produto atualizados" });
+    },
+    onError: () => {
+      toast({
+        variant: "destructive",
+        title: "Não foi possível atualizar o produto",
+      });
+    },
+  });
+
   const loadProductMutation = useMutation({
     mutationFn: getProductById,
     onSuccess: (product) => {
       setProductId(product.id);
+      setSelectedVariationIds(product.variationIds ?? []);
       productForm.reset({
         title: product.title,
         categoryId: product.categoryId,
@@ -104,6 +129,7 @@ export default function ProductDetailsPage() {
     mutationFn: ({ nextProductId, variationIds }: { nextProductId: string; variationIds: string[] }) =>
       linkProductVariations(nextProductId, variationIds),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["products"] });
       toast({ title: "Variações vinculadas com sucesso" });
     },
     onError: () => {
@@ -132,16 +158,31 @@ export default function ProductDetailsPage() {
     },
   });
 
-  const updateItemMutation = useMutation({
-    mutationFn: ({ itemId }: { itemId: string }) => updateProductItem(itemId, { stock: 0 }),
+  const deleteItemMutation = useMutation({
+    mutationFn: ({ itemId }: { itemId: string }) => deleteProductItem(itemId),
     onSuccess: async () => {
       await refetchItems();
-      toast({ title: "Item atualizado" });
+      toast({ title: "Item removido" });
     },
     onError: () => {
       toast({
         variant: "destructive",
-        title: "Não foi possível atualizar o item",
+        title: "Não foi possível remover o item",
+      });
+    },
+  });
+
+  const deleteProductMutation = useMutation({
+    mutationFn: (currentProductId: string) => deleteProduct(currentProductId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+      toast({ title: "Produto removido" });
+      navigate("/produtos", { replace: true });
+    },
+    onError: () => {
+      toast({
+        variant: "destructive",
+        title: "Não foi possível remover o produto",
       });
     },
   });
@@ -152,9 +193,16 @@ export default function ProductDetailsPage() {
     }
   }, [id, isNewProduct]);
 
+  useEffect(() => {
+    setSelectedOptionIds((prev) => {
+      const validOptionIds = new Set(selectedVariations.flatMap((variation) => variation.options.map((option) => option.id)));
+      return prev.filter((optionId) => validOptionIds.has(optionId));
+    });
+  }, [selectedVariations]);
+
   const handleSaveProduct = (values: ProductDetailsFormValues) => {
     if (productId && !isNewProduct) {
-      toast({ title: "Os dados principais já foram carregados para este produto." });
+      updateProductMutation.mutate({ productId, values });
       return;
     }
 
@@ -190,17 +238,38 @@ export default function ProductDetailsPage() {
     });
   };
 
-  const handleToggleOption = (optionId: string, checked: boolean) => {
-    setSelectedOptionIds((prev) =>
-      checked ? [...prev, optionId] : prev.filter((idValue) => idValue !== optionId),
-    );
+  const handleToggleOption = (variationId: string, optionId: string, checked: boolean) => {
+    setSelectedOptionIds((prev) => {
+      const next = new Set(prev);
+      const variation = selectedVariations.find((item) => item.id === variationId);
+
+      if (!variation) {
+        return prev;
+      }
+
+      if (checked) {
+        variation.options.forEach((option) => {
+          if (option.id === optionId) {
+            next.add(option.id);
+          }
+        });
+      } else {
+        variation.options.forEach((option) => {
+          if (option.id === optionId) {
+            next.delete(option.id);
+          }
+        });
+      }
+
+      return Array.from(next);
+    });
   };
 
   const handleAddDraftItem = () => {
-    if (selectedOptionIds.length === 0) {
+    if (selectedVariations.length === 0) {
       toast({
         variant: "destructive",
-        title: "Selecione pelo menos uma opção",
+        title: "Selecione ao menos uma variação",
       });
       return;
     }
@@ -215,23 +284,27 @@ export default function ProductDetailsPage() {
       return;
     }
 
-    const selectedOptions = selectedVariations.flatMap((variation) =>
-      variation.options
-        .filter((option) => selectedOptionIds.includes(option.id))
-        .map((option) => ({
-          variationId: variation.id,
-          optionId: option.id,
-          optionValue: option.value,
-        })),
-    );
+    const selectedOptionsByVariation = selectedVariations.map((variation) => {
+      const options = variation.options.filter((option) => selectedOptionIds.includes(option.id));
+      return {
+        variationId: variation.id,
+        options,
+      };
+    });
 
-    if (selectedOptions.length === 0) {
+    if (selectedOptionsByVariation.some((group) => group.options.length !== 1)) {
       toast({
         variant: "destructive",
-        title: "Nenhuma opção válida foi encontrada",
+        title: "Selecione exatamente uma opção para cada variação",
       });
       return;
     }
+
+    const selectedOptions = selectedOptionsByVariation.map((group) => ({
+      variationId: group.variationId,
+      optionId: group.options[0].id,
+      optionValue: group.options[0].value,
+    }));
 
     const hash = buildOptionHash(selectedOptions.map((option) => option.optionId));
 
@@ -309,8 +382,10 @@ export default function ProductDetailsPage() {
   };
 
   const handleRemoveSavedItem = (itemId: string) => {
-    updateItemMutation.mutate({ itemId });
+    deleteItemMutation.mutate({ itemId });
   };
+
+  const currentProduct = (productsQuery.data ?? []).find((product) => product.id === productId);
 
   return (
     <div className="space-y-6">
@@ -322,18 +397,28 @@ export default function ProductDetailsPage() {
               Voltar para produtos
             </Link>
           </Button>
-          <h1 className="text-2xl font-bold">{isNewProduct ? "Novo produto" : "Produto"}</h1>
+          <h1 className="text-2xl font-bold">{isNewProduct ? "Novo produto" : currentProduct?.title ?? "Produto"}</h1>
           <p className="text-sm text-muted-foreground">
-            Crie, vincule variações e gerencie o estoque do produto em uma única página.
+            Crie, edite, vincule variações e gerencie o estoque do produto em uma única página.
           </p>
         </div>
+
+        {!isNewProduct && productId ? (
+          <Button
+            variant="destructive"
+            onClick={() => deleteProductMutation.mutate(productId)}
+            disabled={deleteProductMutation.isPending}
+          >
+            Excluir produto
+          </Button>
+        ) : null}
       </div>
 
       <ProductDetailsForm
         form={productForm}
         categories={categories}
         onSubmit={handleSaveProduct}
-        isSaving={createProductMutation.isPending || loadProductMutation.isPending}
+        isSaving={createProductMutation.isPending || updateProductMutation.isPending || loadProductMutation.isPending}
         productId={productId}
       />
 
