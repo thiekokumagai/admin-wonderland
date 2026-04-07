@@ -1,8 +1,20 @@
+export type ProductImage = {
+  id: string;
+  url: string;
+};
+
+export type ProductVariationLink = {
+  id: string;
+  variationId: string;
+};
+
 export type ProductResponse = {
   id: string;
   title: string;
   categoryId: string;
+  images: ProductImage[];
   variationIds: string[];
+  itemsCount: number;
 };
 
 export type ProductVariationLinkPayload = {
@@ -13,6 +25,7 @@ export type ProductItemOption = {
   variationId: string;
   optionId: string;
   optionValue: string;
+  variationTitle?: string;
 };
 
 export type ProductItem = {
@@ -28,10 +41,7 @@ export type CreateProductPayload = {
 
 export type CreateProductItemPayload = {
   stock: number;
-  options: {
-    variationId: string;
-    optionId: string;
-  }[];
+  options: string[];
 };
 
 export type UpdateProductItemPayload = {
