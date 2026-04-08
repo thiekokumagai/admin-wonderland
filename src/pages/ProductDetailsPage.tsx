@@ -48,6 +48,16 @@ function buildOptionHash(optionIds: string[]) {
   return [...optionIds].sort().join("|");
 }
 
+function getOrderedOptionIds(optionIds: string[], selectedVariationIds: string[], variations: Variation[]) {
+  return selectedVariationIds
+    .map((variationId) => {
+      const variation = variations.find((item) => item.id === variationId);
+      const option = variation?.options.find((item) => optionIds.includes(item.id));
+      return option?.id ?? null;
+    })
+    .filter((value): value is string => !!value);
+}
+
 function getOptionCombinations(variationsWithSelections: Array<{ variation: Variation; optionIds: string[] }>) {
   return variationsWithSelections.reduce<Array<{ optionIds: string[]; labels: string[] }>>(
     (accumulator, entry) => {
@@ -84,6 +94,19 @@ function getSelectedOptionsMap(product: ProductResponse) {
     acc[variation.variationId] = variation.options.map((option) => option.id);
     return acc;
   }, {});
+}
+
+function sortProductItemsByVariationOrder(items: ProductItem[], selectedVariationIds: string[]) {
+  return [...items].sort((a, b) => {
+    const labelA = selectedVariationIds
+      .map((variationId) => a.options.find((option) => option.variationId === variationId)?.optionValue ?? "")
+      .join(" / ");
+    const labelB = selectedVariationIds
+      .map((variationId) => b.options.find((option) => option.variationId === variationId)?.optionValue ?? "")
+      .join(" / ");
+
+    return labelA.localeCompare(labelB, "pt-BR", { numeric: true, sensitivity: "base" });
+  });
 }
 
 export default function ProductDetailsPage() {
@@ -131,6 +154,11 @@ export default function ProductDetailsPage() {
         .map((variationId) => variations.find((variation) => variation.id === variationId))
         .filter((variation): variation is Variation => !!variation),
     [selectedVariationIds, variations],
+  );
+
+  const orderedSavedItems = useMemo(
+    () => sortProductItemsByVariationOrder(savedItems, selectedVariationIds),
+    [savedItems, selectedVariationIds],
   );
 
   const currentProduct = (productsQuery.data ?? []).find((product) => product.id === productId);
@@ -195,6 +223,10 @@ export default function ProductDetailsPage() {
         const existingHashes = new Set(existingItems.map((item) => buildOptionHash(item.options.map((option) => option.optionId))));
 
         const itemsToCreate = combinations
+          .map((combination) => ({
+            ...combination,
+            optionIds: getOrderedOptionIds(combination.optionIds, variationIds, variations),
+          }))
           .filter((combination) => !existingHashes.has(buildOptionHash(combination.optionIds)))
           .map((combination) => ({
             options: combination.optionIds,
@@ -500,7 +532,7 @@ export default function ProductDetailsPage() {
   };
 
   const handleSaveAllStocks = () => {
-    const payload = savedItems
+    const payload = orderedSavedItems
       .filter((item) => (bulkValues[item.id] ?? "") !== "")
       .map((item) => {
         const value = Number(bulkValues[item.id]);
@@ -649,7 +681,7 @@ export default function ProductDetailsPage() {
             productReady={!!productId}
             hasVariations={selectedVariations.length > 0}
             loadingSavedItems={loadingSavedItems}
-            savedItems={savedItems}
+            savedItems={orderedSavedItems}
             bulkMode={bulkMode}
             bulkValues={bulkValues}
             isSaving={updateStockBatchMutation.isPending}
