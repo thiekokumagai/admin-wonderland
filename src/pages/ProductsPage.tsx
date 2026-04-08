@@ -1,11 +1,12 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useProducts } from "@/hooks/useProducts";
 import { useCategories } from "@/hooks/useCategories";
 import { ProductListCard } from "@/components/products/ProductListCard";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/use-toast";
+import { PageLoader } from "@/components/common/PageLoader";
 import {
   createProduct,
   deleteProduct,
@@ -98,14 +99,7 @@ export default function ProductsPage() {
   });
 
   if (isPageLoading) {
-    return (
-      <div className="flex min-h-[50vh] items-center justify-center">
-        <div className="flex items-center gap-3 text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin" />
-          <span>Carregando produtos...</span>
-        </div>
-      </div>
-    );
+    return <PageLoader message="Carregando produtos..." />;
   }
 
   return (

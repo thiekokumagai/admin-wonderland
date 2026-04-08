@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowLeft, Loader2, Package2, Save, Shapes } from "lucide-react";
+import { ArrowLeft, Package2, Save, Shapes } from "lucide-react";
 import { useCategories } from "@/hooks/useCategories";
 import { useProductItems } from "@/hooks/useProductItems";
 import { useProducts } from "@/hooks/useProducts";
@@ -26,6 +26,7 @@ import { ProductDetailsForm, type ProductDetailsFormValues } from "@/components/
 import { ProductVariationSelector } from "@/components/products/ProductVariationSelector";
 import { ProductImageManager } from "@/components/products/ProductImageManager";
 import { ProductStockEditor, type QuickEditMode } from "@/components/products/ProductStockEditor";
+import { PageLoader } from "@/components/common/PageLoader";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/components/ui/use-toast";
@@ -576,14 +577,7 @@ export default function ProductDetailsPage() {
   };
 
   if (isInitialPageLoading) {
-    return (
-      <div className="flex min-h-[50vh] items-center justify-center">
-        <div className="flex items-center gap-3 text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin" />
-          <span>Carregando produto...</span>
-        </div>
-      </div>
-    );
+    return <PageLoader message="Carregando produto..." />;
   }
 
   return (

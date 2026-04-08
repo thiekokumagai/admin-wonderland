@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm, useFieldArray } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowLeft, Loader2, Plus, Trash2, GripVertical } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, GripVertical } from "lucide-react";
 import { useVariations } from "@/hooks/useVariations";
 import { createVariation, deleteVariation, updateVariation, updateVariationOrderBatch } from "@/services/variation.service";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { toast } from "@/components/ui/use-toast";
+import { PageLoader } from "@/components/common/PageLoader";
 import type { VariationFormValues } from "@/types/variation";
 
 type OptionItem = {
@@ -162,14 +163,7 @@ export default function VariationDetailsPage() {
   };
 
   if (!loaded && !isNewVariation) {
-    return (
-      <div className="flex min-h-[50vh] items-center justify-center">
-        <div className="flex items-center gap-3 text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin" />
-          <span>Carregando variação...</span>
-        </div>
-      </div>
-    );
+    return <PageLoader message="Carregando variação..." />;
   }
 
   return (
@@ -214,7 +208,6 @@ export default function VariationDetailsPage() {
                     <FormLabel>Opções</FormLabel>
                     {isSavingOrder ? (
                       <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
                         Salvando ordem...
                       </span>
                     ) : null}

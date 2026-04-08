@@ -1,22 +1,16 @@
 import { Link } from "react-router-dom";
-import { Loader2, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useVariations } from "@/hooks/useVariations";
 import { VariationListCard } from "@/components/variations/VariationListCard";
 import { Button } from "@/components/ui/button";
+import { PageLoader } from "@/components/common/PageLoader";
 
 export default function VariationPage() {
   const variationsQuery = useVariations();
   const variations = variationsQuery.data ?? [];
 
   if (variationsQuery.isLoading) {
-    return (
-      <div className="flex min-h-[50vh] items-center justify-center">
-        <div className="flex items-center gap-3 text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin" />
-          <span>Carregando variações...</span>
-        </div>
-      </div>
-    );
+    return <PageLoader message="Carregando variações..." />;
   }
 
   return (

@@ -18,6 +18,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/components/ui/use-toast";
+import { PageLoader } from "@/components/common/PageLoader";
 
 import {
   GripVertical,
@@ -260,14 +261,7 @@ export default function CategoriesPage() {
   const [loadingId, setLoadingId] = useState<string | null>(null);
 
   if (loading && localCategories.length === 0) {
-    return (
-      <div className="flex min-h-[50vh] items-center justify-center">
-        <div className="flex items-center gap-3 text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin" />
-          <span>Carregando categorias...</span>
-        </div>
-      </div>
-    );
+    return <PageLoader message="Carregando categorias..." />;
   }
 
   return (
