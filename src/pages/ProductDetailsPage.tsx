@@ -19,18 +19,18 @@ import {
   removeProductVariation,
   removeProductVariationOption,
   replaceProductImage,
-  updateProductItemsBatch,
+  updateProductItem,
   uploadProductImages,
 } from "@/services/product.service";
 import { ProductDetailsForm, type ProductDetailsFormValues } from "@/components/products/ProductDetailsForm";
 import { ProductVariationSelector } from "@/components/products/ProductVariationSelector";
 import { ProductImageManager } from "@/components/products/ProductImageManager";
 import { ProductVariationSummary } from "@/components/products/ProductVariationSummary";
-import { ProductStockEditor } from "@/components/products/ProductStockEditor";
+import { ProductStockEditor, type QuickEditMode } from "@/components/products/ProductStockEditor";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/components/ui/use-toast";
-import type { ProductImage } from "@/types/product";
+import type { ProductImage, ProductItem } from "@/types/product";
 import type { Variation } from "@/types/variation";
 
 const productSchema = z.object({
@@ -72,6 +72,14 @@ function getOptionCombinations(variationsWithSelections: Array<{ variation: Vari
   );
 }
 
+function hasItemWithVariation(item: ProductItem, variationId: string) {
+  return item.options.some((option) => option.variationId === variationId);
+}
+
+function hasItemWithOption(item: ProductItem, optionId: string) {
+  return item.options.some((option) => option.optionId === optionId);
+}
+
 export default function ProductDetailsPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -89,7 +97,9 @@ export default function ProductDetailsPage() {
   const [selectedVariationIds, setSelectedVariationIds] = useState<string[]>([]);
   const [selectedOptionsByVariation, setSelectedOptionsByVariation] = useState<Record<string, string[]>>({});
   const [pendingImages, setPendingImages] = useState<PendingImage[]>([]);
-  const [stockDrafts, setStockDrafts] = useState<Record<string, string>>({});
+  const [quickEditItemId, setQuickEditItemId] = useState<string | null>(null);
+  const [quickEditMode, setQuickEditMode] = useState<QuickEditMode>("add");
+  const [quickEditValue, setQuickEditValue] = useState("");
 
   const productForm = useForm<ProductDetailsFormValues>({
     resolver: zodResolver(productSchema),
@@ -100,15 +110,6 @@ export default function ProductDetailsPage() {
   });
 
   const { data: savedItems = [], isLoading: loadingSavedItems, refetch: refetchItems } = useProductItems(productId ?? "");
-
-  useEffect(() => {
-    setStockDrafts(
-      savedItems.reduce<Record<string, string>>((acc, item) => {
-        acc[item.id] = String(item.stock);
-        return acc;
-      }, {}),
-    );
-  }, [savedItems]);
 
   const selectedVariations = useMemo(
     () =>
@@ -126,7 +127,7 @@ export default function ProductDetailsPage() {
       queryClient.invalidateQueries({ queryKey: ["products"] });
       setProductId(product.id);
       setImages(product.images);
-      setSelectedVariationIds(product.variationIds);
+      setSelectedVariationIds(product.variationIds ?? []);
       navigate(`/produtos/${product.id}`, { replace: true });
       toast({ title: "Produto criado" });
     },
@@ -140,7 +141,7 @@ export default function ProductDetailsPage() {
     onSuccess: (product) => {
       setProductId(product.id);
       setImages(product.images);
-      setSelectedVariationIds(product.variationIds);
+      setSelectedVariationIds(product.variationIds ?? []);
       productForm.reset({
         title: product.title,
         categoryId: product.categoryId,
@@ -154,7 +155,7 @@ export default function ProductDetailsPage() {
   const linkVariationsMutation = useMutation({
     mutationFn: async ({ currentProductId, variationIds }: { currentProductId: string; variationIds: string[] }) => {
       const currentProductData = await getProductById(currentProductId);
-      const alreadyLinkedVariationIds = currentProductData.variationIds;
+      const alreadyLinkedVariationIds = currentProductData.variationIds ?? [];
 
       const newVariationIds = variationIds.filter((variationId) => !alreadyLinkedVariationIds.includes(variationId));
 
@@ -193,9 +194,9 @@ export default function ProductDetailsPage() {
     },
     onSuccess: async (product) => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
-      setSelectedVariationIds(product.variationIds);
+      setSelectedVariationIds(product.variationIds ?? []);
       await refetchItems();
-      toast({ title: "Variações salvas com estoque inicial zero" });
+      toast({ title: "Combinações salvas" });
     },
     onError: (error: Error) => {
       toast({ variant: "destructive", title: error.message || "Não foi possível vincular as variações" });
@@ -206,15 +207,24 @@ export default function ProductDetailsPage() {
     mutationFn: ({ currentProductId, variationId }: { currentProductId: string; variationId: string }) =>
       removeProductVariation(currentProductId, { variationId }),
     onSuccess: async (product, variables) => {
-      setSelectedVariationIds(product.variationIds);
+      setSelectedVariationIds(product.variationIds ?? []);
       setSelectedOptionsByVariation((prev) => {
         const next = { ...prev };
         delete next[variables.variationId];
         return next;
       });
+
+      if (quickEditItemId) {
+        const affected = savedItems.find((item) => item.id === quickEditItemId);
+        if (affected && hasItemWithVariation(affected, variables.variationId)) {
+          setQuickEditItemId(null);
+          setQuickEditValue("");
+        }
+      }
+
       queryClient.invalidateQueries({ queryKey: ["products"] });
       await refetchItems();
-      toast({ title: "Variação removida" });
+      toast({ title: "Variação e estoques relacionados removidos" });
     },
     onError: () => {
       toast({ variant: "destructive", title: "Não foi possível remover a variação" });
@@ -229,8 +239,17 @@ export default function ProductDetailsPage() {
         ...prev,
         [variables.variationId]: (prev[variables.variationId] ?? []).filter((id) => id !== variables.optionId),
       }));
+
+      if (quickEditItemId) {
+        const affected = savedItems.find((item) => item.id === quickEditItemId);
+        if (affected && hasItemWithOption(affected, variables.optionId)) {
+          setQuickEditItemId(null);
+          setQuickEditValue("");
+        }
+      }
+
       await refetchItems();
-      toast({ title: "Opção removida" });
+      toast({ title: "Opção e estoques relacionados removidos" });
     },
     onError: () => {
       toast({ variant: "destructive", title: "Não foi possível remover a opção" });
@@ -277,14 +296,16 @@ export default function ProductDetailsPage() {
     },
   });
 
-  const updateStockBatchMutation = useMutation({
-    mutationFn: (items: { itemId: string; stock: number }[]) => updateProductItemsBatch(items),
+  const updateItemMutation = useMutation({
+    mutationFn: ({ itemId, stock }: { itemId: string; stock: number }) => updateProductItem(itemId, { stock }),
     onSuccess: async () => {
       await refetchItems();
-      toast({ title: "Estoque salvo" });
+      setQuickEditItemId(null);
+      setQuickEditValue("");
+      toast({ title: "Estoque atualizado" });
     },
     onError: () => {
-      toast({ variant: "destructive", title: "Não foi possível salvar o estoque" });
+      toast({ variant: "destructive", title: "Não foi possível atualizar o estoque" });
     },
   });
 
@@ -459,20 +480,33 @@ export default function ProductDetailsPage() {
     });
   };
 
-  const handleSaveAllStocks = () => {
-    const payload = savedItems.map((item) => ({
-      itemId: item.id,
-      stock: Math.max(0, Number(stockDrafts[item.id] ?? item.stock)),
-    }));
+  const handleStartEditStock = (itemId: string) => {
+    setQuickEditItemId(itemId);
+    setQuickEditMode("add");
+    setQuickEditValue("");
+  };
 
-    const hasInvalidValue = payload.some((item) => Number.isNaN(item.stock));
+  const handleCancelEditStock = () => {
+    setQuickEditItemId(null);
+    setQuickEditValue("");
+  };
 
-    if (hasInvalidValue) {
-      toast({ variant: "destructive", title: "Informe quantidades válidas" });
+  const handleSaveStock = (item: ProductItem) => {
+    const value = Number(quickEditValue);
+
+    if (!Number.isInteger(value) || value < 0) {
+      toast({ variant: "destructive", title: "Informe uma quantidade válida" });
       return;
     }
 
-    updateStockBatchMutation.mutate(payload);
+    const nextStock =
+      quickEditMode === "add"
+        ? item.stock + value
+        : quickEditMode === "subtract"
+          ? Math.max(0, item.stock - value)
+          : value;
+
+    updateItemMutation.mutate({ itemId: item.id, stock: nextStock });
   };
 
   return (
@@ -588,7 +622,7 @@ export default function ProductDetailsPage() {
               disabled={!productId || linkVariationsMutation.isPending}
               className="rounded-xl"
             >
-              {linkVariationsMutation.isPending ? "Salvando..." : "Salvar variações"}
+              {linkVariationsMutation.isPending ? "Salvando..." : "Salvar combinações"}
             </Button>
           </div>
         </TabsContent>
@@ -599,15 +633,15 @@ export default function ProductDetailsPage() {
             hasVariations={selectedVariations.length > 0}
             loadingSavedItems={loadingSavedItems}
             savedItems={savedItems}
-            stockDrafts={stockDrafts}
-            isSaving={updateStockBatchMutation.isPending}
-            onValueChange={(itemId, value) => {
-              setStockDrafts((prev) => ({
-                ...prev,
-                [itemId]: value,
-              }));
-            }}
-            onSaveAll={handleSaveAllStocks}
+            quickEditItemId={quickEditItemId}
+            quickEditMode={quickEditMode}
+            quickEditValue={quickEditValue}
+            isSaving={updateItemMutation.isPending}
+            onStartEdit={handleStartEditStock}
+            onModeChange={setQuickEditMode}
+            onValueChange={setQuickEditValue}
+            onCancelEdit={handleCancelEditStock}
+            onSaveEdit={handleSaveStock}
           />
         </TabsContent>
       </Tabs>

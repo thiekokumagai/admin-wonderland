@@ -33,7 +33,7 @@ type ProductImageManagerProps = {
   onReplaceImage?: (imageId: string, file: File) => Promise<void> | void;
 };
 
-const MAX_IMAGES = 9;
+const MAX_IMAGES = 6;
 
 function createImageElement(src: string) {
   return new Promise<HTMLImageElement>((resolve, reject) => {
@@ -211,7 +211,7 @@ export function ProductImageManager({
           onChange={handleSelectFiles}
         />
 
-        <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {slots.map((slot) => {
             if (slot.type === "saved") {
               return (
