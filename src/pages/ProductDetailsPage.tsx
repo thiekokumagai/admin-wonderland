@@ -141,13 +141,15 @@ export default function ProductDetailsPage() {
   const { data: savedItems = [], isLoading: loadingSavedItems, refetch: refetchItems } = useProductItems(productId ?? "");
 
   useEffect(() => {
-    setBulkValues(
-      savedItems.reduce<Record<string, string>>((acc, item) => {
-        acc[item.id] = "";
-        return acc;
-      }, {}),
-    );
-  }, [savedItems]);
+  if (!savedItems?.length) return;
+
+      setBulkValues(
+        savedItems.reduce<Record<string, string>>((acc, item) => {
+          acc[item.id] = "";
+          return acc;
+        }, {}),
+      );
+    }, [savedItems]);
 
   const selectedVariations = useMemo(
     () =>
