@@ -1,5 +1,4 @@
 import { CheckCircle2, CheckSquare, Plus, Square, Trash2, Unlink } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
@@ -42,11 +41,9 @@ export function ProductVariationSelector({
   return (
     <div className="space-y-6">
       {variations.length === 0 ? (
-        <Card className="rounded-3xl border-0 bg-muted/20 shadow-none">
-          <CardContent className="p-6 text-sm text-muted-foreground">
-            Nenhuma variação cadastrada ainda.
-          </CardContent>
-        </Card>
+        <div className="rounded-2xl border border-dashed p-6 text-sm text-muted-foreground">
+          Nenhuma variação cadastrada ainda.
+        </div>
       ) : (
         <>
           {Array.from({ length: slots }).map((_, index) => {
@@ -57,9 +54,15 @@ export function ProductVariationSelector({
             const canRemove = slots > 1;
 
             return (
-              <div key={`variation-slot-${index}`} className="space-y-4">
+              <div key={`variation-slot-${index}`} className="space-y-4 rounded-3xl border bg-card p-5">
                 <div className="flex items-center justify-between gap-2">
-                  <Label className="text-base font-semibold">Variação {index + 1}</Label>
+                  <div className="space-y-1">
+                    <Label className="text-base font-semibold">Variação vinculada</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Se a variação e as opções já estiverem salvas no banco, elas aparecem marcadas aqui.
+                    </p>
+                  </div>
+
                   <div className="flex items-center gap-2">
                     {selectedVariation ? (
                       <Button
@@ -69,7 +72,7 @@ export function ProductVariationSelector({
                         onClick={() => onRemoveVariation(selectedVariation.id)}
                         disabled={disabled}
                         className="text-destructive"
-                        title="Remover variação do produto"
+                        title="Excluir variação salva"
                       >
                         <Unlink className="h-4 w-4" />
                       </Button>
@@ -98,7 +101,7 @@ export function ProductVariationSelector({
                     disabled={disabled}
                   >
                     <SelectTrigger className="h-12 rounded-2xl bg-background">
-                      <SelectValue placeholder="Selecione" />
+                      <SelectValue placeholder="Selecione a variação" />
                     </SelectTrigger>
                     <SelectContent>
                       {variations.map((variation) => {
@@ -126,36 +129,43 @@ export function ProductVariationSelector({
                 </div>
 
                 {selectedVariation ? (
-                  <div className="space-y-4 pt-2">
-                    <button
-                      type="button"
-                      className="flex items-center gap-2 text-sm font-medium text-foreground"
-                      onClick={() => onToggleAllOptions(selectedVariation.id, !allChecked)}
-                      disabled={disabled}
-                    >
-                      {allChecked ? <CheckSquare className="h-4 w-4 text-primary" /> : <Square className="h-4 w-4 text-muted-foreground" />}
-                      Marcar todos
-                    </button>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <p className="font-medium">{selectedVariation.title}</p>
+                        <p className="text-sm text-muted-foreground">
+                          Opções vinculadas e selecionadas para este produto.
+                        </p>
+                      </div>
 
-                    <div className="space-y-4">
+                      <button
+                        type="button"
+                        className="flex items-center gap-2 text-sm font-medium text-foreground"
+                        onClick={() => onToggleAllOptions(selectedVariation.id, !allChecked)}
+                        disabled={disabled}
+                      >
+                        {allChecked ? <CheckSquare className="h-4 w-4 text-primary" /> : <Square className="h-4 w-4 text-muted-foreground" />}
+                        Marcar todos
+                      </button>
+                    </div>
+
+                    <div className="space-y-3">
                       {selectedVariation.options.map((option) => {
                         const checked = selectedOptionIds.includes(option.id);
 
                         return (
-                          <div key={option.id} className="flex items-center justify-between gap-3">
-                            <button
-                              type="button"
-                              className="flex items-center gap-3 text-left"
-                              onClick={() => onToggleOption(selectedVariation.id, option.id, !checked)}
-                              disabled={disabled}
-                            >
-                              {checked ? (
-                                <CheckCircle2 className="h-5 w-5 text-primary" />
-                              ) : (
-                                <div className="h-5 w-5 rounded-full border border-muted-foreground/40" />
-                              )}
-                              <span className="text-base">{option.value}</span>
-                            </button>
+                          <div key={option.id} className="flex items-center justify-between gap-3 rounded-2xl border p-3">
+                            <label className="flex items-center gap-3">
+                              <Checkbox
+                                checked={checked}
+                                onCheckedChange={(value) => onToggleOption(selectedVariation.id, option.id, !!value)}
+                                disabled={disabled}
+                              />
+                              <div className="flex items-center gap-2">
+                                {checked ? <CheckCircle2 className="h-4 w-4 text-primary" /> : null}
+                                <span>{option.value}</span>
+                              </div>
+                            </label>
 
                             {checked ? (
                               <Button
@@ -165,7 +175,7 @@ export function ProductVariationSelector({
                                 className="text-destructive"
                                 onClick={() => onRemoveVariationOption(selectedVariation.id, option.id)}
                                 disabled={disabled}
-                                title="Remover opção cadastrada"
+                                title="Excluir opção salva"
                               >
                                 <Trash2 className="h-4 w-4" />
                               </Button>
@@ -175,7 +185,11 @@ export function ProductVariationSelector({
                       })}
                     </div>
                   </div>
-                ) : null}
+                ) : (
+                  <div className="rounded-2xl border border-dashed p-5 text-sm text-muted-foreground">
+                    Selecione uma variação para ver e marcar as opções.
+                  </div>
+                )}
               </div>
             );
           })}

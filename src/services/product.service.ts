@@ -24,6 +24,10 @@ type ProductApiResponse = {
     variation?: {
       id: string;
       title: string;
+      options?: Array<{
+        id: string;
+        value: string;
+      }>;
     };
     options?: Array<{
       id: string;
@@ -62,7 +66,7 @@ function normalizeProduct(item: ProductApiResponse): ProductResponse {
       id: variation.id,
       variationId: variation.variationId ?? variation.variation?.id ?? "",
       title: variation.title ?? variation.variation?.title ?? "",
-      options: (variation.options ?? []).map((option) => ({
+      options: (variation.options ?? variation.variation?.options ?? []).map((option) => ({
         id: option.id,
         value: option.value,
       })),
