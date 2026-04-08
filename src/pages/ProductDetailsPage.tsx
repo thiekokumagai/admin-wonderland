@@ -162,9 +162,6 @@ export default function ProductDetailsPage() {
   );
 
   const currentProduct = (productsQuery.data ?? []).find((product) => product.id === productId);
-  const isInitialPageLoading =
-    !isNewProduct &&
-    (loadProductMutationPendingPlaceholder() || categoriesQuery.loading || variationsQuery.isLoading);
 
   const createProductMutation = useMutation({
     mutationFn: createProduct,
@@ -199,9 +196,9 @@ export default function ProductDetailsPage() {
     },
   });
 
-  function loadProductMutationPendingPlaceholder() {
-    return loadProductMutation.isPending;
-  }
+  const isInitialPageLoading =
+    !isNewProduct &&
+    (loadProductMutation.isPending || categoriesQuery.loading || variationsQuery.isLoading);
 
   const linkVariationsMutation = useMutation({
     mutationFn: async ({ currentProductId, variationIds }: { currentProductId: string; variationIds: string[] }) => {
