@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowLeft, Package2, Plus, Save, Shapes, Trash2 } from "lucide-react";
+import { ArrowLeft, Package2, Save, Shapes, Trash2 } from "lucide-react";
 import { useCategories } from "@/hooks/useCategories";
 import { useProductItems } from "@/hooks/useProductItems";
 import { useProducts } from "@/hooks/useProducts";
@@ -57,6 +57,29 @@ function buildOptionHash(optionIds: string[]) {
   return [...optionIds].sort().join("|");
 }
 
+function getOptionCombinations(variationsWithSelections: Array<{ variation: Variation; optionIds: string[] }>) {
+  return variationsWithSelections.reduce<Array<{ optionIds: string[]; labels: string[] }>>(
+    (accumulator, entry) => {
+      const options = entry.variation.options.filter((option) => entry.optionIds.includes(option.id));
+
+      if (accumulator.length === 0) {
+        return options.map((option) => ({
+          optionIds: [option.id],
+          labels: [option.value],
+        }));
+      }
+
+      return accumulator.flatMap((combination) =>
+        options.map((option) => ({
+          optionIds: [...combination.optionIds, option.id],
+          labels: [...combination.labels, option.value],
+        })),
+      );
+    },
+    [],
+  );
+}
+
 function getNextStock(currentStock: number, value: number, mode: QuickEditMode) {
   if (mode === "add") {
     return currentStock + value;
@@ -87,7 +110,6 @@ export default function ProductDetailsPage() {
   const [selectedOptionsByVariation, setSelectedOptionsByVariation] = useState<Record<string, string[]>>({});
   const [pendingImages, setPendingImages] = useState<PendingImage[]>([]);
   const [draftItems, setDraftItems] = useState<DraftItem[]>([]);
-  const [stockDraftByHash, setStockDraftByHash] = useState<Record<string, string>>({});
   const [quickEditItemId, setQuickEditItemId] = useState<string | null>(null);
   const [quickEditMode, setQuickEditMode] = useState<QuickEditMode>("add");
   const [quickEditValue, setQuickEditValue] = useState("");
@@ -106,6 +128,21 @@ export default function ProductDetailsPage() {
     () => selectedVariationIds.map((variationId) => variations.find((variation) => variation.id === variationId)).filter((variation): variation is Variation => !!variation),
     [selectedVariationIds, variations],
   );
+
+  const combinationPreview = useMemo(() => {
+    const variationsWithSelections = selectedVariations
+      .map((variation) => ({
+        variation,
+        optionIds: selectedOptionsByVariation[variation.id] ?? [],
+      }))
+      .filter((entry) => entry.optionIds.length > 0);
+
+    if (variationsWithSelections.length !== selectedVariations.length || variationsWithSelections.length === 0) {
+      return [];
+    }
+
+    return getOptionCombinations(variationsWithSelections);
+  }, [selectedOptionsByVariation, selectedVariations]);
 
   const currentProduct = (productsQuery.data ?? []).find((product) => product.id === productId);
 
@@ -141,15 +178,41 @@ export default function ProductDetailsPage() {
   });
 
   const linkVariationsMutation = useMutation({
-    mutationFn: ({ currentProductId, variationIds }: { currentProductId: string; variationIds: string[] }) =>
-      linkProductVariations(currentProductId, variationIds),
-    onSuccess: (product) => {
+    mutationFn: async ({ currentProductId, variationIds }: { currentProductId: string; variationIds: string[] }) => {
+      const product = await linkProductVariations(currentProductId, variationIds);
+
+      const variationsWithSelections = variationIds
+        .map((variationId) => {
+          const variation = variations.find((item) => item.id === variationId);
+          const optionIds = selectedOptionsByVariation[variationId] ?? [];
+          return variation && optionIds.length > 0 ? { variation, optionIds } : null;
+        })
+        .filter((entry): entry is { variation: Variation; optionIds: string[] } => !!entry);
+
+      if (variationsWithSelections.length > 0) {
+        const combinations = getOptionCombinations(variationsWithSelections);
+        const existingItems = await getProductItems(currentProductId);
+        const existingHashes = new Set(existingItems.map((item) => buildOptionHash(item.options.map((option) => option.optionId))));
+
+        const itemsToCreate: CreateProductItemPayload[] = combinations
+          .filter((combination) => !existingHashes.has(buildOptionHash(combination.optionIds)))
+          .map((combination) => ({
+            options: combination.optionIds,
+            stock: 0,
+          }));
+
+        if (itemsToCreate.length > 0) {
+          await createProductItems(currentProductId, itemsToCreate);
+        }
+      }
+
+      return product;
+    },
+    onSuccess: async (product) => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
       setSelectedVariationIds(product.variationIds);
-      setSelectedOptionsByVariation({});
-      setDraftItems([]);
-      setStockDraftByHash({});
-      toast({ title: "Variações salvas" });
+      await refetchItems();
+      toast({ title: "Variações salvas com estoque inicial zero" });
     },
     onError: (error: Error) => {
       toast({ variant: "destructive", title: error.message || "Não foi possível vincular as variações" });
@@ -193,22 +256,6 @@ export default function ProductDetailsPage() {
     },
     onError: () => {
       toast({ variant: "destructive", title: "Não foi possível atualizar a imagem" });
-    },
-  });
-
-  const saveItemsMutation = useMutation({
-    mutationFn: ({ currentProductId, items }: { currentProductId: string; items: CreateProductItemPayload[] }) =>
-      createProductItems(currentProductId, items),
-    onSuccess: async () => {
-      setDraftItems([]);
-      setSelectedOptionsByVariation({});
-      setStockDraftByHash({});
-      await refetchItems();
-      queryClient.invalidateQueries({ queryKey: ["products"] });
-      toast({ title: "Itens do produto salvos" });
-    },
-    onError: (error: Error) => {
-      toast({ variant: "destructive", title: error.message || "Não foi possível salvar os itens" });
     },
   });
 
@@ -340,6 +387,10 @@ export default function ProductDetailsPage() {
     }));
   };
 
+  const handleRemoveCombinationLine = (variationId: string, optionId: string) => {
+    handleToggleVariationOption(variationId, optionId, false);
+  };
+
   const handleSaveVariationLinks = () => {
     if (!productId) {
       toast({ variant: "destructive", title: "Crie o produto antes de salvar as variações" });
@@ -357,68 +408,6 @@ export default function ProductDetailsPage() {
       currentProductId: productId,
       variationIds: validVariationIds,
     });
-  };
-
-  const selectedOptionIds = selectedVariations.flatMap((variation) => selectedOptionsByVariation[variation.id] ?? []);
-
-  const canCreateCombination =
-    selectedVariations.length > 0 && selectedVariations.every((variation) => (selectedOptionsByVariation[variation.id] ?? []).length > 0);
-
-  const currentCombinationHash = canCreateCombination ? buildOptionHash(selectedOptionIds) : "";
-
-  const handleAddDraftItem = () => {
-    if (!canCreateCombination) {
-      toast({ variant: "destructive", title: "Marque ao menos uma opção em cada variação" });
-      return;
-    }
-
-    const hash = buildOptionHash(selectedOptionIds);
-    const stockValue = stockDraftByHash[hash] ?? "0";
-    const stock = Number(stockValue);
-
-    if (!Number.isInteger(stock) || stock < 0) {
-      toast({ variant: "destructive", title: "Informe uma quantidade válida" });
-      return;
-    }
-
-    const labels = selectedVariations.flatMap((variation) => {
-      const optionIds = selectedOptionsByVariation[variation.id] ?? [];
-      return variation.options.filter((option) => optionIds.includes(option.id)).map((option) => option.value);
-    });
-
-    if (draftItems.some((item) => buildOptionHash(item.optionIds) === hash)) {
-      toast({ variant: "destructive", title: "Essa combinação já foi adicionada" });
-      return;
-    }
-
-    setDraftItems((prev) => [
-      ...prev,
-      {
-        id: crypto.randomUUID(),
-        optionIds: selectedOptionIds,
-        labels,
-        stock,
-      },
-    ]);
-  };
-
-  const handleSaveAllItems = () => {
-    if (!productId) {
-      toast({ variant: "destructive", title: "Crie o produto antes de salvar os itens" });
-      return;
-    }
-
-    if (draftItems.length === 0) {
-      toast({ variant: "destructive", title: "Adicione ao menos uma combinação" });
-      return;
-    }
-
-    const items: CreateProductItemPayload[] = draftItems.map((item) => ({
-      options: item.optionIds,
-      stock: item.stock,
-    }));
-
-    saveItemsMutation.mutate({ currentProductId: productId, items });
   };
 
   const handleApplyQuickEdit = (item: ProductItem) => {
@@ -540,16 +529,32 @@ export default function ProductDetailsPage() {
               <CardContent className="space-y-3">
                 {selectedVariations.map((variation) => {
                   const selectedOptionIds = selectedOptionsByVariation[variation.id] ?? [];
-                  const selectedOptionLabels = variation.options
-                    .filter((option) => selectedOptionIds.includes(option.id))
-                    .map((option) => option.value);
+                  const selectedOptions = variation.options.filter((option) => selectedOptionIds.includes(option.id));
+
+                  if (selectedOptions.length === 0) {
+                    return (
+                      <div key={variation.id} className="rounded-2xl bg-card p-4 text-sm text-muted-foreground">
+                        {variation.title}: nenhuma opção marcada.
+                      </div>
+                    );
+                  }
 
                   return (
-                    <div key={variation.id} className="rounded-2xl bg-card p-4">
+                    <div key={variation.id} className="rounded-2xl bg-card p-4 space-y-3">
                       <p className="font-medium">{variation.title}</p>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        {selectedOptionLabels.length > 0 ? selectedOptionLabels.join(", ") : "Nenhuma opção marcada."}
-                      </p>
+                      {selectedOptions.map((option) => (
+                        <div key={option.id} className="flex items-center justify-between gap-3 rounded-xl border p-3">
+                          <span className="text-sm">{option.value}</span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleRemoveCombinationLine(variation.id, option.id)}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                      ))}
                     </div>
                   );
                 })}
@@ -567,7 +572,7 @@ export default function ProductDetailsPage() {
         <TabsContent value="estoque" className="space-y-6">
           <Card className="rounded-3xl border-0 bg-muted/20 shadow-none">
             <CardHeader>
-              <CardTitle className="text-lg">Estoque por combinação</CardTitle>
+              <CardTitle className="text-lg">Estoque</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
               {!productId ? (
@@ -576,202 +581,99 @@ export default function ProductDetailsPage() {
                 </div>
               ) : selectedVariations.length === 0 ? (
                 <div className="rounded-2xl border border-dashed p-6 text-sm text-muted-foreground">
-                  Escolha as variações primeiro para liberar o controle de quantidade.
+                  Salve as variações para gerar os itens com estoque zero.
+                </div>
+              ) : loadingSavedItems ? (
+                <div className="rounded-2xl border border-dashed p-6 text-sm text-muted-foreground">
+                  Carregando itens...
+                </div>
+              ) : savedItems.length === 0 ? (
+                <div className="rounded-2xl border border-dashed p-6 text-sm text-muted-foreground">
+                  Nenhum item gerado ainda. Salve as variações para criar os itens automaticamente.
                 </div>
               ) : (
-                <>
-                  <div className="grid gap-4 xl:grid-cols-3">
-                    {selectedVariations.map((variation) => (
-                      <div key={variation.id} className="rounded-3xl bg-card p-4">
-                        <p className="mb-3 font-medium">{variation.title}</p>
-                        <div className="space-y-2">
-                          {variation.options.map((option) => {
-                            const active = (selectedOptionsByVariation[variation.id] ?? []).includes(option.id);
-                            return (
-                              <button
-                                key={option.id}
-                                type="button"
-                                onClick={() => handleToggleVariationOption(variation.id, option.id, !active)}
-                                className={`w-full rounded-2xl border px-3 py-2 text-left text-sm transition-colors ${
-                                  active ? "border-primary bg-primary/10 text-primary" : "hover:bg-muted"
-                                }`}
-                              >
-                                {option.value}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                <div className="space-y-3">
+                  {savedItems.map((item) => {
+                    const isEditing = quickEditItemId === item.id;
+                    const previewStock = quickEditValue === "" ? item.stock : getNextStock(item.stock, Number(quickEditValue || 0), quickEditMode);
 
-                  <div className="grid gap-4 rounded-3xl bg-card p-4 md:grid-cols-[1fr_auto] md:items-end">
-                    <div className="space-y-2">
-                      <Label>Quantidade</Label>
-                      <Input
-                        type="number"
-                        min="0"
-                        value={currentCombinationHash ? stockDraftByHash[currentCombinationHash] ?? "" : ""}
-                        onChange={(event) => {
-                          if (!currentCombinationHash) {
-                            return;
-                          }
-                          setStockDraftByHash((prev) => ({
-                            ...prev,
-                            [currentCombinationHash]: event.target.value,
-                          }));
-                        }}
-                        placeholder="0"
-                        disabled={!canCreateCombination}
-                      />
-                    </div>
-                    <Button type="button" onClick={handleAddDraftItem} disabled={!canCreateCombination} className="rounded-xl">
-                      Adicionar combinação
-                    </Button>
-                  </div>
+                    return (
+                      <div key={item.id} className="space-y-3 rounded-2xl bg-card p-4">
+                        <div className="flex items-center justify-between gap-4">
+                          <div>
+                            <p className="font-medium">{renderSavedItemLabel(item)}</p>
+                            <p className="text-sm text-muted-foreground">Quantidade atual: {item.stock}</p>
+                          </div>
 
-                  <div className="grid gap-6 xl:grid-cols-2">
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <h3 className="font-semibold">Combinações prontas</h3>
-                        <span className="text-sm text-muted-foreground">{draftItems.length} item(ns)</span>
-                      </div>
-
-                      {draftItems.length === 0 ? (
-                        <div className="rounded-2xl border border-dashed p-5 text-sm text-muted-foreground">
-                          Nenhuma combinação adicionada ainda.
-                        </div>
-                      ) : (
-                        draftItems.map((item) => (
-                          <div key={item.id} className="flex items-center justify-between rounded-2xl bg-card p-4">
-                            <div>
-                              <p className="font-medium">{item.labels.join(" / ")}</p>
-                              <p className="text-sm text-muted-foreground">Qtde: {item.stock}</p>
-                            </div>
+                          {!isEditing ? (
                             <Button
                               type="button"
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => setDraftItems((prev) => prev.filter((draft) => draft.id !== item.id))}
+                              variant="outline"
+                              size="sm"
+                              className="rounded-full"
+                              onClick={() => {
+                                setQuickEditItemId(item.id);
+                                setQuickEditMode("add");
+                                setQuickEditValue("");
+                              }}
                             >
-                              <Trash2 className="h-4 w-4 text-destructive" />
+                              Editar quantidade
                             </Button>
-                          </div>
-                        ))
-                      )}
-
-                      <div className="flex justify-end">
-                        <Button
-                          type="button"
-                          onClick={handleSaveAllItems}
-                          disabled={draftItems.length === 0 || saveItemsMutation.isPending}
-                          className="rounded-xl"
-                        >
-                          Salvar combinações
-                        </Button>
-                      </div>
-                    </div>
-
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <h3 className="font-semibold">Estoque salvo</h3>
-                        <span className="text-sm text-muted-foreground">{savedItems.length} SKU(s)</span>
-                      </div>
-
-                      {loadingSavedItems ? (
-                        <div className="rounded-2xl border border-dashed p-5 text-sm text-muted-foreground">
-                          Carregando itens...
+                          ) : null}
                         </div>
-                      ) : savedItems.length === 0 ? (
-                        <div className="rounded-2xl border border-dashed p-5 text-sm text-muted-foreground">
-                          Nenhum item salvo ainda.
-                        </div>
-                      ) : (
-                        savedItems.map((item) => {
-                          const isEditing = quickEditItemId === item.id;
-                          const previewStock = quickEditValue === "" ? item.stock : getNextStock(item.stock, Number(quickEditValue || 0), quickEditMode);
 
-                          return (
-                            <div key={item.id} className="space-y-3 rounded-2xl bg-card p-4">
-                              <div className="flex items-center justify-between gap-4">
-                                <div>
-                                  <p className="font-medium">{renderSavedItemLabel(item)}</p>
-                                  <p className="text-sm text-muted-foreground">Quantidade atual: {item.stock}</p>
-                                </div>
+                        {isEditing ? (
+                          <div className="space-y-3 rounded-2xl border border-dashed p-4">
+                            <div className="flex flex-wrap gap-2">
+                              <Button type="button" size="sm" variant={quickEditMode === "add" ? "default" : "outline"} onClick={() => setQuickEditMode("add")}>
+                                Somar
+                              </Button>
+                              <Button type="button" size="sm" variant={quickEditMode === "subtract" ? "default" : "outline"} onClick={() => setQuickEditMode("subtract")}>
+                                Subtrair
+                              </Button>
+                              <Button type="button" size="sm" variant={quickEditMode === "replace" ? "default" : "outline"} onClick={() => setQuickEditMode("replace")}>
+                                Substituir
+                              </Button>
+                            </div>
 
-                                {!isEditing ? (
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    className="rounded-full"
-                                    onClick={() => {
-                                      setQuickEditItemId(item.id);
-                                      setQuickEditMode("add");
-                                      setQuickEditValue("");
-                                    }}
-                                  >
-                                    <Plus className="mr-1 h-4 w-4" />
-                                    Editar quantidade
-                                  </Button>
-                                ) : null}
+                            <div className="grid gap-3 md:grid-cols-[180px_1fr_auto] md:items-end">
+                              <div className="space-y-2">
+                                <Label>Quantidade</Label>
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  value={quickEditValue}
+                                  onChange={(event) => setQuickEditValue(event.target.value)}
+                                  placeholder="0"
+                                />
                               </div>
 
-                              {isEditing ? (
-                                <div className="space-y-3 rounded-2xl border border-dashed p-4">
-                                  <div className="flex flex-wrap gap-2">
-                                    <Button type="button" size="sm" variant={quickEditMode === "add" ? "default" : "outline"} onClick={() => setQuickEditMode("add")}>
-                                      Somar
-                                    </Button>
-                                    <Button type="button" size="sm" variant={quickEditMode === "subtract" ? "default" : "outline"} onClick={() => setQuickEditMode("subtract")}>
-                                      Subtrair
-                                    </Button>
-                                    <Button type="button" size="sm" variant={quickEditMode === "replace" ? "default" : "outline"} onClick={() => setQuickEditMode("replace")}>
-                                      Substituir
-                                    </Button>
-                                  </div>
+                              <div className="rounded-2xl bg-muted px-4 py-3 text-sm text-muted-foreground">
+                                Resultado previsto: <span className="font-medium text-foreground">{Number.isNaN(previewStock) ? item.stock : previewStock}</span>
+                              </div>
 
-                                  <div className="grid gap-3 md:grid-cols-[180px_1fr_auto] md:items-end">
-                                    <div className="space-y-2">
-                                      <Label>Quantidade</Label>
-                                      <Input
-                                        type="number"
-                                        min="0"
-                                        value={quickEditValue}
-                                        onChange={(event) => setQuickEditValue(event.target.value)}
-                                        placeholder="0"
-                                      />
-                                    </div>
-
-                                    <div className="rounded-2xl bg-muted px-4 py-3 text-sm text-muted-foreground">
-                                      Resultado previsto: <span className="font-medium text-foreground">{Number.isNaN(previewStock) ? item.stock : previewStock}</span>
-                                    </div>
-
-                                    <div className="flex gap-2">
-                                      <Button
-                                        type="button"
-                                        variant="outline"
-                                        onClick={() => {
-                                          setQuickEditItemId(null);
-                                          setQuickEditValue("");
-                                        }}
-                                      >
-                                        Cancelar
-                                      </Button>
-                                      <Button type="button" onClick={() => handleApplyQuickEdit(item)} disabled={updateItemMutation.isPending}>
-                                        Salvar
-                                      </Button>
-                                    </div>
-                                  </div>
-                                </div>
-                              ) : null}
+                              <div className="flex gap-2">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  onClick={() => {
+                                    setQuickEditItemId(null);
+                                    setQuickEditValue("");
+                                  }}
+                                >
+                                  Cancelar
+                                </Button>
+                                <Button type="button" onClick={() => handleApplyQuickEdit(item)} disabled={updateItemMutation.isPending}>
+                                  Salvar
+                                </Button>
+                              </div>
                             </div>
-                          );
-                        })
-                      )}
-                    </div>
-                  </div>
-                </>
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
               )}
             </CardContent>
           </Card>
