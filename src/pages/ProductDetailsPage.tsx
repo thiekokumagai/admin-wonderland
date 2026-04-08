@@ -25,7 +25,6 @@ import {
 import { ProductDetailsForm, type ProductDetailsFormValues } from "@/components/products/ProductDetailsForm";
 import { ProductVariationSelector } from "@/components/products/ProductVariationSelector";
 import { ProductImageManager } from "@/components/products/ProductImageManager";
-import { ProductVariationSummary } from "@/components/products/ProductVariationSummary";
 import { ProductStockEditor, type QuickEditMode } from "@/components/products/ProductStockEditor";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -481,10 +480,6 @@ export default function ProductDetailsPage() {
     }));
   };
 
-  const handleRemoveCombinationLine = (variationId: string, optionId: string) => {
-    handleToggleVariationOption(variationId, optionId, false);
-  };
-
   const handleSaveVariationLinks = () => {
     if (!productId) {
       toast({ variant: "destructive", title: "Crie o produto antes de salvar as variações" });
@@ -635,12 +630,6 @@ export default function ProductDetailsPage() {
               removeVariationMutation.isPending ||
               removeVariationOptionMutation.isPending
             }
-          />
-
-          <ProductVariationSummary
-            selectedVariations={selectedVariations}
-            selectedOptionsByVariation={selectedOptionsByVariation}
-            onRemoveCombinationLine={handleRemoveCombinationLine}
           />
 
           <div>
