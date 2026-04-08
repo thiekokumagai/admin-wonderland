@@ -1,60 +1,158 @@
-import { Layers3 } from "lucide-react";
+import { CheckSquare, Layers3, Plus, Square } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { Variation } from "@/types/variation";
 
 type ProductVariationSelectorProps = {
   variations: Variation[];
   selectedVariationIds: string[];
-  onToggle: (variationId: string, checked: boolean) => void;
+  selectedOptionsByVariation: Record<string, string[]>;
+  onChangeVariation: (slot: number, variationId: string) => void;
+  onAddSlot: () => void;
+  onToggleOption: (variationId: string, optionId: string, checked: boolean) => void;
+  onToggleAllOptions: (variationId: string, checked: boolean) => void;
   disabled: boolean;
 };
+
+function getSelectedVariation(variations: Variation[], variationId?: string) {
+  return variations.find((variation) => variation.id === variationId) ?? null;
+}
 
 export function ProductVariationSelector({
   variations,
   selectedVariationIds,
-  onToggle,
+  selectedOptionsByVariation,
+  onChangeVariation,
+  onAddSlot,
+  onToggleOption,
+  onToggleAllOptions,
   disabled,
 }: ProductVariationSelectorProps) {
+  const slots = Math.max(selectedVariationIds.length, 1);
+
   return (
     <Card className="rounded-3xl border-0 bg-muted/20 shadow-none">
-      <CardHeader className="pb-3">
+      <CardHeader className="space-y-2 pb-3">
         <CardTitle className="text-lg">Variações</CardTitle>
+        <p className="text-sm text-muted-foreground">
+          Selecione os tipos de variações disponíveis para o seu produto.
+        </p>
       </CardHeader>
-      <CardContent className="space-y-4">
+
+      <CardContent>
         {variations.length === 0 ? (
           <div className="rounded-2xl border border-dashed p-6 text-sm text-muted-foreground">
             Nenhuma variação cadastrada ainda.
           </div>
         ) : (
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {variations.map((variation) => {
-              const checked = selectedVariationIds.includes(variation.id);
+          <div className="grid gap-6 xl:grid-cols-[1fr_1fr_240px]">
+            {Array.from({ length: slots }).map((_, index) => {
+              const selectedVariationId = selectedVariationIds[index] ?? "";
+              const selectedVariation = getSelectedVariation(variations, selectedVariationId);
+              const selectedOptionIds = selectedVariation ? selectedOptionsByVariation[selectedVariation.id] ?? [] : [];
+              const allChecked = !!selectedVariation && selectedVariation.options.length > 0 && selectedOptionIds.length === selectedVariation.options.length;
 
               return (
-                <label
-                  key={variation.id}
-                  className={`flex cursor-pointer items-start gap-3 rounded-2xl border p-4 transition-colors ${
-                    checked ? "border-primary bg-primary/5" : "bg-card hover:bg-muted/50"
-                  } ${disabled ? "cursor-not-allowed opacity-60" : ""}`}
-                >
-                  <Checkbox
-                    checked={checked}
-                    onCheckedChange={(value) => onToggle(variation.id, !!value)}
-                    disabled={disabled}
-                  />
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 font-medium">
-                      <Layers3 className="h-4 w-4 text-primary" />
-                      <span>{variation.title}</span>
+                <div key={`variation-slot-${index}`} className="space-y-4 xl:border-r xl:pr-6 last:border-r-0 last:pr-0">
+                  <div className="space-y-2">
+                    <Label>Variação {index + 1}</Label>
+                    <div className="flex items-center gap-2">
+                      <Select
+                        value={selectedVariationId}
+                        onValueChange={(value) => onChangeVariation(index, value)}
+                        disabled={disabled}
+                      >
+                        <SelectTrigger className="h-12 rounded-2xl bg-background">
+                          <SelectValue placeholder="Selecione" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {variations.map((variation) => {
+                            const alreadySelected = selectedVariationIds.includes(variation.id) && selectedVariationId !== variation.id;
+                            return (
+                              <SelectItem key={variation.id} value={variation.id} disabled={alreadySelected}>
+                                {variation.title}
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
+
+                      {index === slots - 1 ? (
+                        <Button
+                          type="button"
+                          size="icon"
+                          className="h-12 w-12 rounded-full"
+                          variant="default"
+                          onClick={onAddSlot}
+                          disabled={disabled || selectedVariationIds.length >= variations.length}
+                        >
+                          <Plus className="h-5 w-5" />
+                        </Button>
+                      ) : null}
                     </div>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {variation.options.map((option) => option.value).join(", ") || "Sem opções"}
-                    </p>
                   </div>
-                </label>
+
+                  {selectedVariation ? (
+                    <div className="space-y-3">
+                      <button
+                        type="button"
+                        className="flex items-center gap-2 text-sm font-medium text-foreground"
+                        onClick={() => onToggleAllOptions(selectedVariation.id, !allChecked)}
+                        disabled={disabled}
+                      >
+                        {allChecked ? <CheckSquare className="h-4 w-4 text-primary" /> : <Square className="h-4 w-4 text-muted-foreground" />}
+                        Marcar todos
+                      </button>
+
+                      <div className="space-y-3">
+                        {selectedVariation.options.map((option) => {
+                          const checked = selectedOptionIds.includes(option.id);
+
+                          return (
+                            <label key={option.id} className="flex items-center gap-3 text-sm">
+                              <Checkbox
+                                checked={checked}
+                                onCheckedChange={(value) => onToggleOption(selectedVariation.id, option.id, !!value)}
+                                disabled={disabled}
+                              />
+                              <span>{option.value}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-dashed p-5 text-sm text-muted-foreground">
+                      Selecione uma variação para listar as opções.
+                    </div>
+                  )}
+                </div>
               );
             })}
+
+            <div className="space-y-3 xl:pl-2">
+              <div className="rounded-2xl bg-background p-4">
+                <div className="flex items-center gap-2 font-medium">
+                  <Layers3 className="h-4 w-4 text-primary" />
+                  Resumo
+                </div>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {selectedVariationIds.length === 0
+                    ? "Nenhuma variação selecionada."
+                    : `${selectedVariationIds.length} variação(ões) escolhida(s).`}
+                </p>
+              </div>
+
+              <Button type="button" className="w-full rounded-xl" disabled={disabled}>
+                Salvar
+              </Button>
+              <Button type="button" variant="outline" className="w-full rounded-xl" disabled>
+                Gerenciar combinações
+              </Button>
+            </div>
           </div>
         )}
       </CardContent>

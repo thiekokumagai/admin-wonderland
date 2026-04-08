@@ -84,7 +84,7 @@ export default function ProductDetailsPage() {
   const [productId, setProductId] = useState<string | null>(isNewProduct ? null : id ?? null);
   const [images, setImages] = useState<ProductImage[]>([]);
   const [selectedVariationIds, setSelectedVariationIds] = useState<string[]>([]);
-  const [selectedOptionsByVariation, setSelectedOptionsByVariation] = useState<Record<string, string>>({});
+  const [selectedOptionsByVariation, setSelectedOptionsByVariation] = useState<Record<string, string[]>>({});
   const [pendingImages, setPendingImages] = useState<PendingImage[]>([]);
   const [draftItems, setDraftItems] = useState<DraftItem[]>([]);
   const [stockDraftByHash, setStockDraftByHash] = useState<Record<string, string>>({});
@@ -103,7 +103,7 @@ export default function ProductDetailsPage() {
   const { data: savedItems = [], isLoading: loadingSavedItems, refetch: refetchItems } = useProductItems(productId ?? "");
 
   const selectedVariations = useMemo<Variation[]>(
-    () => variations.filter((variation) => selectedVariationIds.includes(variation.id)),
+    () => selectedVariationIds.map((variationId) => variations.find((variation) => variation.id === variationId)).filter((variation): variation is Variation => !!variation),
     [selectedVariationIds, variations],
   );
 
@@ -149,6 +149,7 @@ export default function ProductDetailsPage() {
       setSelectedOptionsByVariation({});
       setDraftItems([]);
       setStockDraftByHash({});
+      toast({ title: "Variações salvas" });
     },
     onError: (error: Error) => {
       toast({ variant: "destructive", title: error.message || "Não foi possível vincular as variações" });
@@ -290,57 +291,84 @@ export default function ProductDetailsPage() {
     }
   };
 
-  const handleToggleVariation = (variationId: string, checked: boolean) => {
-    const nextVariationIds = checked
-      ? [...selectedVariationIds, variationId]
-      : selectedVariationIds.filter((item) => item !== variationId);
+  const handleChangeVariation = (slot: number, variationId: string) => {
+    const nextVariationIds = [...selectedVariationIds];
+    nextVariationIds[slot] = variationId;
 
-    setSelectedVariationIds(nextVariationIds);
+    const cleanedVariationIds = nextVariationIds.filter(Boolean);
+    setSelectedVariationIds(cleanedVariationIds);
 
+    setSelectedOptionsByVariation((prev) => {
+      const next = { ...prev };
+      Object.keys(next).forEach((key) => {
+        if (!cleanedVariationIds.includes(key)) {
+          delete next[key];
+        }
+      });
+      return next;
+    });
+  };
+
+  const handleAddVariationSlot = () => {
+    if (selectedVariationIds.length >= variations.length) {
+      return;
+    }
+
+    setSelectedVariationIds((prev) => [...prev, ""]);
+  };
+
+  const handleToggleVariationOption = (variationId: string, optionId: string, checked: boolean) => {
+    setSelectedOptionsByVariation((prev) => {
+      const current = prev[variationId] ?? [];
+      const nextValues = checked ? [...current, optionId] : current.filter((id) => id !== optionId);
+      return {
+        ...prev,
+        [variationId]: nextValues,
+      };
+    });
+  };
+
+  const handleToggleAllVariationOptions = (variationId: string, checked: boolean) => {
+    const variation = variations.find((item) => item.id === variationId);
+    if (!variation) {
+      return;
+    }
+
+    setSelectedOptionsByVariation((prev) => ({
+      ...prev,
+      [variationId]: checked ? variation.options.map((option) => option.id) : [],
+    }));
+  };
+
+  const handleSaveVariationLinks = () => {
     if (!productId) {
-      if (!checked) {
-        setSelectedOptionsByVariation((prev) => {
-          const next = { ...prev };
-          delete next[variationId];
-          return next;
-        });
-      }
+      toast({ variant: "destructive", title: "Crie o produto antes de salvar as variações" });
+      return;
+    }
+
+    const validVariationIds = selectedVariationIds.filter(Boolean);
+
+    if (validVariationIds.length === 0) {
+      toast({ variant: "destructive", title: "Selecione pelo menos uma variação" });
       return;
     }
 
     linkVariationsMutation.mutate({
       currentProductId: productId,
-      variationIds: nextVariationIds,
+      variationIds: validVariationIds,
     });
-
-    if (!checked) {
-      setSelectedOptionsByVariation((prev) => {
-        const next = { ...prev };
-        delete next[variationId];
-        return next;
-      });
-    }
   };
 
-  const handleSelectVariationOption = (variationId: string, optionId: string) => {
-    setSelectedOptionsByVariation((prev) => ({
-      ...prev,
-      [variationId]: optionId,
-    }));
-  };
-
-  const selectedOptionIds = selectedVariations
-    .map((variation) => selectedOptionsByVariation[variation.id])
-    .filter((value): value is string => !!value);
+  const selectedOptionIds = selectedVariations.flatMap((variation) => selectedOptionsByVariation[variation.id] ?? []);
 
   const canCreateCombination =
-    selectedVariations.length > 0 && selectedOptionIds.length === selectedVariations.length;
+    selectedVariations.length > 0 && selectedVariations.every((variation) => (selectedOptionsByVariation[variation.id] ?? []).length > 0);
 
   const currentCombinationHash = canCreateCombination ? buildOptionHash(selectedOptionIds) : "";
 
   const handleAddDraftItem = () => {
     if (!canCreateCombination) {
-      toast({ variant: "destructive", title: "Escolha uma opção para cada variação" });
+      toast({ variant: "destructive", title: "Marque ao menos uma opção em cada variação" });
       return;
     }
 
@@ -353,9 +381,9 @@ export default function ProductDetailsPage() {
       return;
     }
 
-    const labels = selectedVariations.map((variation) => {
-      const option = variation.options.find((item) => item.id === selectedOptionsByVariation[variation.id]);
-      return option?.value ?? "";
+    const labels = selectedVariations.flatMap((variation) => {
+      const optionIds = selectedOptionsByVariation[variation.id] ?? [];
+      return variation.options.filter((option) => optionIds.includes(option.id)).map((option) => option.value);
     });
 
     if (draftItems.some((item) => buildOptionHash(item.optionIds) === hash)) {
@@ -372,8 +400,6 @@ export default function ProductDetailsPage() {
         stock,
       },
     ]);
-
-    setSelectedOptionsByVariation({});
   };
 
   const handleSaveAllItems = () => {
@@ -495,35 +521,21 @@ export default function ProductDetailsPage() {
         </TabsContent>
 
         <TabsContent value="variacoes" className="space-y-6">
-          <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
-            <ProductVariationSelector
-              variations={variations}
-              selectedVariationIds={selectedVariationIds}
-              onToggle={handleToggleVariation}
-              disabled={!productId || linkVariationsMutation.isPending}
-            />
+          <ProductVariationSelector
+            variations={variations}
+            selectedVariationIds={selectedVariationIds}
+            selectedOptionsByVariation={selectedOptionsByVariation}
+            onChangeVariation={handleChangeVariation}
+            onAddSlot={handleAddVariationSlot}
+            onToggleOption={handleToggleVariationOption}
+            onToggleAllOptions={handleToggleAllVariationOptions}
+            disabled={!productId || linkVariationsMutation.isPending}
+          />
 
-            <Card className="rounded-3xl border-0 bg-muted/20 shadow-none">
-              <CardHeader>
-                <CardTitle className="text-lg">Variações escolhidas</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {selectedVariations.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed p-5 text-sm text-muted-foreground">
-                    Nenhuma variação selecionada.
-                  </div>
-                ) : (
-                  selectedVariations.map((variation) => (
-                    <div key={variation.id} className="rounded-2xl bg-card p-4">
-                      <p className="font-medium">{variation.title}</p>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        {variation.options.map((option) => option.value).join(", ")}
-                      </p>
-                    </div>
-                  ))
-                )}
-              </CardContent>
-            </Card>
+          <div className="flex justify-end">
+            <Button type="button" onClick={handleSaveVariationLinks} disabled={!productId || linkVariationsMutation.isPending} className="rounded-xl">
+              {linkVariationsMutation.isPending ? "Salvando..." : "Salvar variações"}
+            </Button>
           </div>
         </TabsContent>
 
@@ -549,12 +561,12 @@ export default function ProductDetailsPage() {
                         <p className="mb-3 font-medium">{variation.title}</p>
                         <div className="space-y-2">
                           {variation.options.map((option) => {
-                            const active = selectedOptionsByVariation[variation.id] === option.id;
+                            const active = (selectedOptionsByVariation[variation.id] ?? []).includes(option.id);
                             return (
                               <button
                                 key={option.id}
                                 type="button"
-                                onClick={() => handleSelectVariationOption(variation.id, option.id)}
+                                onClick={() => handleToggleVariationOption(variation.id, option.id, !active)}
                                 className={`w-full rounded-2xl border px-3 py-2 text-left text-sm transition-colors ${
                                   active ? "border-primary bg-primary/10 text-primary" : "hover:bg-muted"
                                 }`}
