@@ -200,13 +200,12 @@ export default function ProductDetailsPage() {
     mutationFn: async ({ currentProductId, variationIds }: { currentProductId: string; variationIds: string[] }) => {
       const currentProductData = await getProductById(currentProductId);
       const alreadyLinkedVariationIds = currentProductData.variationIds ?? [];
-
-      const newVariationIds = variationIds.filter((variationId) => !alreadyLinkedVariationIds.includes(variationId));
+      const variationIdsToLink = variationIds.filter((variationId) => !alreadyLinkedVariationIds.includes(variationId));
 
       let product = currentProductData;
 
-      if (newVariationIds.length > 0) {
-        product = await linkProductVariations(currentProductId, newVariationIds);
+      if (variationIdsToLink.length > 0) {
+        product = await linkProductVariations(currentProductId, variationIdsToLink);
       }
 
       const variationsWithSelections = variationIds
@@ -217,25 +216,33 @@ export default function ProductDetailsPage() {
         })
         .filter((entry): entry is { variation: Variation; optionIds: string[] } => !!entry);
 
-      if (variationsWithSelections.length > 0) {
-        const combinations = getOptionCombinations(variationsWithSelections);
-        const existingItems = await getProductItems(currentProductId);
-        const existingHashes = new Set(existingItems.map((item) => buildOptionHash(item.options.map((option) => option.optionId))));
+      if (variationsWithSelections.length === 0) {
+        return await getProductById(currentProductId);
+      }
 
-        const itemsToCreate = combinations
-          .map((combination) => ({
-            ...combination,
-            optionIds: getOrderedOptionIds(combination.optionIds, variationIds, variations),
-          }))
-          .filter((combination) => !existingHashes.has(buildOptionHash(combination.optionIds)))
-          .map((combination) => ({
-            options: combination.optionIds,
-            stock: 0,
-          }));
+      const combinations = getOptionCombinations(variationsWithSelections).map((combination) => ({
+        optionIds: getOrderedOptionIds(combination.optionIds, variationIds, variations),
+      }));
 
-        if (itemsToCreate.length > 0) {
-          await createProductItems(currentProductId, itemsToCreate);
-        }
+      const existingItems = await getProductItems(currentProductId);
+      const existingHashes = new Set(
+        existingItems.map((item) => buildOptionHash(item.options.map((option) => option.optionId))),
+      );
+
+      const uniqueItemsToCreate = combinations.filter(
+        (combination, index, array) =>
+          array.findIndex((entry) => buildOptionHash(entry.optionIds) === buildOptionHash(combination.optionIds)) === index,
+      );
+
+      const itemsToCreate = uniqueItemsToCreate
+        .filter((combination) => !existingHashes.has(buildOptionHash(combination.optionIds)))
+        .map((combination) => ({
+          options: combination.optionIds,
+          stock: 0,
+        }));
+
+      if (itemsToCreate.length > 0) {
+        await createProductItems(currentProductId, itemsToCreate);
       }
 
       return await getProductById(currentProductId);
