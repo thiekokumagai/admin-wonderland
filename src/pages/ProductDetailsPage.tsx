@@ -532,7 +532,32 @@ export default function ProductDetailsPage() {
             disabled={!productId || linkVariationsMutation.isPending}
           />
 
-          <div className="flex justify-end">
+          {selectedVariations.length > 0 ? (
+            <Card className="rounded-3xl border-0 bg-muted/20 shadow-none">
+              <CardHeader>
+                <CardTitle className="text-lg">Combinações selecionadas</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {selectedVariations.map((variation) => {
+                  const selectedOptionIds = selectedOptionsByVariation[variation.id] ?? [];
+                  const selectedOptionLabels = variation.options
+                    .filter((option) => selectedOptionIds.includes(option.id))
+                    .map((option) => option.value);
+
+                  return (
+                    <div key={variation.id} className="rounded-2xl bg-card p-4">
+                      <p className="font-medium">{variation.title}</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {selectedOptionLabels.length > 0 ? selectedOptionLabels.join(", ") : "Nenhuma opção marcada."}
+                      </p>
+                    </div>
+                  );
+                })}
+              </CardContent>
+            </Card>
+          ) : null}
+
+          <div>
             <Button type="button" onClick={handleSaveVariationLinks} disabled={!productId || linkVariationsMutation.isPending} className="rounded-xl">
               {linkVariationsMutation.isPending ? "Salvando..." : "Salvar variações"}
             </Button>

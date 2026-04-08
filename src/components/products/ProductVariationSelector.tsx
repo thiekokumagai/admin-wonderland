@@ -1,4 +1,4 @@
-import { CheckSquare, Layers3, Plus, Square } from "lucide-react";
+import { CheckSquare, Plus, Square } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -42,13 +42,13 @@ export function ProductVariationSelector({
         </p>
       </CardHeader>
 
-      <CardContent>
+      <CardContent className="space-y-6">
         {variations.length === 0 ? (
           <div className="rounded-2xl border border-dashed p-6 text-sm text-muted-foreground">
             Nenhuma variação cadastrada ainda.
           </div>
         ) : (
-          <div className="grid gap-6 xl:grid-cols-[1fr_1fr_240px]">
+          <>
             {Array.from({ length: slots }).map((_, index) => {
               const selectedVariationId = selectedVariationIds[index] ?? "";
               const selectedVariation = getSelectedVariation(variations, selectedVariationId);
@@ -56,10 +56,10 @@ export function ProductVariationSelector({
               const allChecked = !!selectedVariation && selectedVariation.options.length > 0 && selectedOptionIds.length === selectedVariation.options.length;
 
               return (
-                <div key={`variation-slot-${index}`} className="space-y-4 xl:border-r xl:pr-6 last:border-r-0 last:pr-0">
+                <div key={`variation-slot-${index}`} className="space-y-4 rounded-3xl bg-background p-4">
                   <div className="space-y-2">
                     <Label>Variação {index + 1}</Label>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-col gap-2 sm:flex-row">
                       <Select
                         value={selectedVariationId}
                         onValueChange={(value) => onChangeVariation(index, value)}
@@ -83,11 +83,10 @@ export function ProductVariationSelector({
                       {index === slots - 1 ? (
                         <Button
                           type="button"
-                          size="icon"
-                          className="h-12 w-12 rounded-full"
+                          className="h-12 rounded-2xl sm:w-12 sm:px-0"
                           variant="default"
                           onClick={onAddSlot}
-                          disabled={disabled || selectedVariationIds.length >= variations.length}
+                          disabled={disabled || selectedVariationIds.filter(Boolean).length >= variations.length}
                         >
                           <Plus className="h-5 w-5" />
                         </Button>
@@ -132,28 +131,7 @@ export function ProductVariationSelector({
                 </div>
               );
             })}
-
-            <div className="space-y-3 xl:pl-2">
-              <div className="rounded-2xl bg-background p-4">
-                <div className="flex items-center gap-2 font-medium">
-                  <Layers3 className="h-4 w-4 text-primary" />
-                  Resumo
-                </div>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  {selectedVariationIds.length === 0
-                    ? "Nenhuma variação selecionada."
-                    : `${selectedVariationIds.length} variação(ões) escolhida(s).`}
-                </p>
-              </div>
-
-              <Button type="button" className="w-full rounded-xl" disabled={disabled}>
-                Salvar
-              </Button>
-              <Button type="button" variant="outline" className="w-full rounded-xl" disabled>
-                Gerenciar combinações
-              </Button>
-            </div>
-          </div>
+          </>
         )}
       </CardContent>
     </Card>
