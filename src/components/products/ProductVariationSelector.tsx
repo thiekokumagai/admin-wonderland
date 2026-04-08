@@ -1,4 +1,4 @@
-import { CheckSquare, Plus, Square, Trash2 } from "lucide-react";
+import { CheckSquare, Plus, Square, Trash2, Unlink } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -15,6 +15,8 @@ type ProductVariationSelectorProps = {
   onRemoveSlot: (slot: number) => void;
   onToggleOption: (variationId: string, optionId: string, checked: boolean) => void;
   onToggleAllOptions: (variationId: string, checked: boolean) => void;
+  onRemoveVariation: (variationId: string) => void;
+  onRemoveVariationOption: (variationId: string, optionId: string) => void;
   disabled: boolean;
 };
 
@@ -31,6 +33,8 @@ export function ProductVariationSelector({
   onRemoveSlot,
   onToggleOption,
   onToggleAllOptions,
+  onRemoveVariation,
+  onRemoveVariationOption,
   disabled,
 }: ProductVariationSelectorProps) {
   const slots = Math.max(selectedVariationIds.length, 1);
@@ -63,18 +67,35 @@ export function ProductVariationSelector({
                   <div className="space-y-2">
                     <div className="flex items-center justify-between gap-2">
                       <Label>Variação {index + 1}</Label>
-                      {canRemove ? (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => onRemoveSlot(index)}
-                          disabled={disabled}
-                          className="text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      ) : null}
+                      <div className="flex items-center gap-2">
+                        {selectedVariation ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => onRemoveVariation(selectedVariation.id)}
+                            disabled={disabled}
+                            className="text-destructive"
+                            title="Remover variação do produto"
+                          >
+                            <Unlink className="h-4 w-4" />
+                          </Button>
+                        ) : null}
+
+                        {canRemove ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => onRemoveSlot(index)}
+                            disabled={disabled}
+                            className="text-destructive"
+                            title="Remover linha"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        ) : null}
+                      </div>
                     </div>
 
                     <div className="flex flex-col gap-2 sm:flex-row">
@@ -129,14 +150,30 @@ export function ProductVariationSelector({
                           const checked = selectedOptionIds.includes(option.id);
 
                           return (
-                            <label key={option.id} className="flex items-center gap-3 text-sm">
-                              <Checkbox
-                                checked={checked}
-                                onCheckedChange={(value) => onToggleOption(selectedVariation.id, option.id, !!value)}
-                                disabled={disabled}
-                              />
-                              <span>{option.value}</span>
-                            </label>
+                            <div key={option.id} className="flex items-center justify-between gap-3 text-sm">
+                              <label className="flex items-center gap-3">
+                                <Checkbox
+                                  checked={checked}
+                                  onCheckedChange={(value) => onToggleOption(selectedVariation.id, option.id, !!value)}
+                                  disabled={disabled}
+                                />
+                                <span>{option.value}</span>
+                              </label>
+
+                              {checked ? (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="text-destructive"
+                                  onClick={() => onRemoveVariationOption(selectedVariation.id, option.id)}
+                                  disabled={disabled}
+                                  title="Remover opção cadastrada"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              ) : null}
+                            </div>
                           );
                         })}
                       </div>

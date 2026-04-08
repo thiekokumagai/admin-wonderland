@@ -4,6 +4,8 @@ import type {
   CreateProductPayload,
   ProductItem,
   ProductResponse,
+  RemoveProductVariationOptionPayload,
+  RemoveProductVariationPayload,
   UpdateProductItemPayload,
 } from "@/types/product";
 
@@ -136,6 +138,29 @@ export async function linkProductVariations(productId: string, variationIds: str
   return normalizeProduct(data);
 }
 
+export async function removeProductVariation(productId: string, payload: RemoveProductVariationPayload): Promise<ProductResponse> {
+  const response = await apiFetch(`/products/${productId}/variations`, {
+    method: "DELETE",
+    body: JSON.stringify(payload),
+  });
+
+  const data = (await response.json()) as ProductApiResponse;
+  return normalizeProduct(data);
+}
+
+export async function removeProductVariationOption(
+  productId: string,
+  payload: RemoveProductVariationOptionPayload,
+): Promise<ProductResponse> {
+  const response = await apiFetch(`/products/${productId}/variations/options`, {
+    method: "DELETE",
+    body: JSON.stringify(payload),
+  });
+
+  const data = (await response.json()) as ProductApiResponse;
+  return normalizeProduct(data);
+}
+
 export async function createProductItems(productId: string, items: CreateProductItemPayload[]): Promise<ProductItem[]> {
   const response = await apiFetch(`/products/${productId}/items`, {
     method: "POST",
@@ -162,4 +187,8 @@ export async function updateProductItem(itemId: string, payload: UpdateProductIt
 
   const data = (await response.json()) as ProductItemApiResponse;
   return normalizeProductItem(data);
+}
+
+export async function updateProductItemsBatch(items: { itemId: string; stock: number }[]) {
+  return Promise.all(items.map((item) => updateProductItem(item.itemId, { stock: item.stock })));
 }

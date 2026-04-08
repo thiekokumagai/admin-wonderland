@@ -47,3 +47,12 @@ export type CreateProductItemPayload = {
 export type UpdateProductItemPayload = {
   stock: number;
 };
+
+export type RemoveProductVariationPayload = {
+  variationId: string;
+};
+
+export type RemoveProductVariationOptionPayload = {
+  variationId: string;
+  optionId: string;
+};

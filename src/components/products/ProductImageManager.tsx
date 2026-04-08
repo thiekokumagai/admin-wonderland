@@ -215,7 +215,7 @@ export function ProductImageManager({
           {slots.map((slot) => {
             if (slot.type === "saved") {
               return (
-                <div key={slot.key} className="relative h-20 overflow-hidden rounded-xl bg-muted sm:h-24">
+                <div key={slot.key} className="relative aspect-square overflow-hidden rounded-xl bg-muted">
                   <img src={buildImageUrl(slot.image.url)} alt={`Imagem ${slot.index + 1}`} className="h-full w-full object-cover" />
                   <button
                     type="button"
@@ -241,7 +241,7 @@ export function ProductImageManager({
 
             if (slot.type === "pending") {
               return (
-                <div key={slot.key} className="relative h-20 overflow-hidden rounded-xl bg-muted sm:h-24">
+                <div key={slot.key} className="relative aspect-square overflow-hidden rounded-xl bg-muted">
                   <img src={slot.image.previewUrl} alt={slot.image.name} className="h-full w-full object-cover" />
                   <button
                     type="button"
@@ -261,7 +261,7 @@ export function ProductImageManager({
                 type="button"
                 onClick={() => inputRef.current?.click()}
                 disabled={remainingSlots === 0 || isUploading}
-                className="relative flex h-20 items-center justify-center rounded-xl bg-muted text-muted-foreground disabled:cursor-not-allowed disabled:opacity-60 sm:h-24"
+                className="relative flex aspect-square items-center justify-center rounded-xl bg-muted text-muted-foreground disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <ImageIcon className="h-8 w-8" />
                 {remainingSlots > 0 ? (
