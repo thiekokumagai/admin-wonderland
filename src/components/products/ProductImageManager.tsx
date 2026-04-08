@@ -3,7 +3,6 @@ import Cropper, { type Area } from "react-easy-crop";
 import { Crop, ImageIcon, Plus, X } from "lucide-react";
 import { buildImageUrl } from "@/utils/image-url";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Slider } from "@/components/ui/slider";
 import { toast } from "@/components/ui/use-toast";
@@ -195,11 +194,8 @@ export function ProductImageManager({
 
   return (
     <Card className="rounded-3xl">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0">
+      <CardHeader>
         <CardTitle className="text-xl">Fotos do produto</CardTitle>
-        <Button type="button" variant="outline" className="rounded-xl" disabled={images.length === 0 && pendingImages.length === 0}>
-          Editar imagem
-        </Button>
       </CardHeader>
       <CardContent className="space-y-4">
         <input
@@ -302,12 +298,22 @@ export function ProductImageManager({
                 </div>
 
                 <div className="flex justify-end gap-2">
-                  <Button type="button" variant="outline" onClick={closeCropDialog} disabled={isCropping}>
+                  <button
+                    type="button"
+                    onClick={closeCropDialog}
+                    disabled={isCropping}
+                    className="inline-flex h-10 items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium"
+                  >
                     Cancelar
-                  </Button>
-                  <Button type="button" onClick={() => void handleApplyCrop()} disabled={isCropping || isUpdatingImage}>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleApplyCrop()}
+                    disabled={isCropping || isUpdatingImage}
+                    className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
+                  >
                     {isCropping || isUpdatingImage ? "Aplicando..." : "Aplicar crop"}
-                  </Button>
+                  </button>
                 </div>
               </div>
             ) : null}
