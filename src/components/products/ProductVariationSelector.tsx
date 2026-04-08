@@ -44,7 +44,7 @@ export function ProductVariationSelector({
       <CardHeader className="space-y-2 pb-3">
         <CardTitle className="text-lg">Variações</CardTitle>
         <p className="text-sm text-muted-foreground">
-          Selecione os tipos de variações disponíveis para o seu produto.
+          As variações e opções já salvas aparecem marcadas automaticamente.
         </p>
       </CardHeader>
 

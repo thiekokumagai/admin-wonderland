@@ -20,6 +20,15 @@ type ProductApiResponse = {
   variations?: Array<{
     id: string;
     variationId: string;
+    title?: string;
+    variation?: {
+      id: string;
+      title: string;
+    };
+    options?: Array<{
+      id: string;
+      value: string;
+    }>;
   }>;
   items?: unknown[];
 };
@@ -48,7 +57,16 @@ function normalizeProduct(item: ProductApiResponse): ProductResponse {
       id: image.id,
       url: image.url,
     })),
-    variationIds: (item.variations ?? []).map((variation) => variation.variationId),
+    variationIds: (item.variations ?? []).map((variation) => variation.variationId ?? variation.variation?.id ?? ""),
+    variations: (item.variations ?? []).map((variation) => ({
+      id: variation.id,
+      variationId: variation.variationId ?? variation.variation?.id ?? "",
+      title: variation.title ?? variation.variation?.title ?? "",
+      options: (variation.options ?? []).map((option) => ({
+        id: option.id,
+        value: option.value,
+      })),
+    })),
     itemsCount: item.items?.length ?? 0,
   };
 }

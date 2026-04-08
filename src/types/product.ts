@@ -8,12 +8,25 @@ export type ProductVariationLink = {
   variationId: string;
 };
 
+export type SavedProductVariationOption = {
+  id: string;
+  value: string;
+};
+
+export type SavedProductVariation = {
+  id: string;
+  variationId: string;
+  title: string;
+  options: SavedProductVariationOption[];
+};
+
 export type ProductResponse = {
   id: string;
   title: string;
   categoryId: string;
   images: ProductImage[];
   variationIds: string[];
+  variations: SavedProductVariation[];
   itemsCount: number;
 };
 

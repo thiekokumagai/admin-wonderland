@@ -10,15 +10,12 @@ type ProductStockEditorProps = {
   hasVariations: boolean;
   loadingSavedItems: boolean;
   savedItems: ProductItem[];
-  quickEditItemId: string | null;
-  quickEditMode: QuickEditMode;
-  quickEditValue: string;
+  bulkMode: QuickEditMode;
+  bulkValues: Record<string, string>;
   isSaving: boolean;
-  onStartEdit: (itemId: string) => void;
   onModeChange: (mode: QuickEditMode) => void;
-  onValueChange: (value: string) => void;
-  onCancelEdit: () => void;
-  onSaveEdit: (item: ProductItem) => void;
+  onValueChange: (itemId: string, value: string) => void;
+  onSaveAll: () => void;
 };
 
 function getNextStock(currentStock: number, value: number, mode: QuickEditMode) {
@@ -42,21 +39,46 @@ export function ProductStockEditor({
   hasVariations,
   loadingSavedItems,
   savedItems,
-  quickEditItemId,
-  quickEditMode,
-  quickEditValue,
+  bulkMode,
+  bulkValues,
   isSaving,
-  onStartEdit,
   onModeChange,
   onValueChange,
-  onCancelEdit,
-  onSaveEdit,
+  onSaveAll,
 }: ProductStockEditorProps) {
   return (
     <Card className="rounded-3xl border-0 bg-muted/20 shadow-none">
-      <CardHeader>
+      <CardHeader className="space-y-4">
         <CardTitle className="text-lg">Estoque</CardTitle>
+
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant={bulkMode === "add" ? "default" : "outline"}
+            onClick={() => onModeChange("add")}
+          >
+            Somar
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={bulkMode === "subtract" ? "default" : "outline"}
+            onClick={() => onModeChange("subtract")}
+          >
+            Subtrair
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={bulkMode === "replace" ? "default" : "outline"}
+            onClick={() => onModeChange("replace")}
+          >
+            Substituir
+          </Button>
+        </div>
       </CardHeader>
+
       <CardContent className="space-y-6">
         {!productReady ? (
           <div className="rounded-2xl border border-dashed p-6 text-sm text-muted-foreground">
@@ -64,7 +86,7 @@ export function ProductStockEditor({
           </div>
         ) : !hasVariations ? (
           <div className="rounded-2xl border border-dashed p-6 text-sm text-muted-foreground">
-            Salve as variações para gerar os itens com estoque zero.
+            Salve as combinações para gerar os itens.
           </div>
         ) : loadingSavedItems ? (
           <div className="rounded-2xl border border-dashed p-6 text-sm text-muted-foreground">
@@ -75,98 +97,49 @@ export function ProductStockEditor({
             Nenhum item gerado ainda.
           </div>
         ) : (
-          <div className="space-y-3">
-            {savedItems.map((item) => {
-              const isEditing = quickEditItemId === item.id;
-              const previewStock =
-                quickEditValue === ""
-                  ? item.stock
-                  : getNextStock(item.stock, Number(quickEditValue || 0), quickEditMode);
+          <>
+            <div className="space-y-3">
+              {savedItems.map((item) => {
+                const rawValue = bulkValues[item.id] ?? "";
+                const parsedValue = Number(rawValue);
+                const previewStock =
+                  rawValue === "" || Number.isNaN(parsedValue)
+                    ? item.stock
+                    : getNextStock(item.stock, parsedValue, bulkMode);
 
-              return (
-                <div key={item.id} className="space-y-3 rounded-2xl bg-card p-4">
-                  <div className="flex items-center justify-between gap-4">
+                return (
+                  <div key={item.id} className="grid gap-3 rounded-2xl bg-card p-4 md:grid-cols-[1fr_160px_220px] md:items-end">
                     <div>
                       <p className="font-medium">{renderSavedItemLabel(item)}</p>
-                      <p className="text-sm text-muted-foreground">Quantidade atual: {item.stock}</p>
+                      <p className="text-sm text-muted-foreground">Atual: {item.stock}</p>
                     </div>
 
-                    {!isEditing ? (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="rounded-full"
-                        onClick={() => onStartEdit(item.id)}
-                      >
-                        Editar quantidade
-                      </Button>
-                    ) : null}
+                    <div>
+                      <p className="mb-2 text-sm font-medium">Quantidade</p>
+                      <Input
+                        type="number"
+                        min="0"
+                        value={rawValue}
+                        onChange={(event) => onValueChange(item.id, event.target.value)}
+                        placeholder="0"
+                      />
+                    </div>
+
+                    <div className="rounded-2xl bg-muted px-4 py-3 text-sm text-muted-foreground">
+                      Resultado previsto:{" "}
+                      <span className="font-medium text-foreground">{previewStock}</span>
+                    </div>
                   </div>
+                );
+              })}
+            </div>
 
-                  {isEditing ? (
-                    <div className="space-y-3 rounded-2xl border border-dashed p-4">
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant={quickEditMode === "add" ? "default" : "outline"}
-                          onClick={() => onModeChange("add")}
-                        >
-                          Somar
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant={quickEditMode === "subtract" ? "default" : "outline"}
-                          onClick={() => onModeChange("subtract")}
-                        >
-                          Subtrair
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant={quickEditMode === "replace" ? "default" : "outline"}
-                          onClick={() => onModeChange("replace")}
-                        >
-                          Substituir
-                        </Button>
-                      </div>
-
-                      <div className="grid gap-3 md:grid-cols-[180px_1fr_auto] md:items-end">
-                        <div>
-                          <p className="mb-2 text-sm font-medium">Quantidade</p>
-                          <Input
-                            type="number"
-                            min="0"
-                            value={quickEditValue}
-                            onChange={(event) => onValueChange(event.target.value)}
-                            placeholder="0"
-                          />
-                        </div>
-
-                        <div className="rounded-2xl bg-muted px-4 py-3 text-sm text-muted-foreground">
-                          Resultado previsto:{" "}
-                          <span className="font-medium text-foreground">
-                            {Number.isNaN(previewStock) ? item.stock : previewStock}
-                          </span>
-                        </div>
-
-                        <div className="flex gap-2">
-                          <Button type="button" variant="outline" onClick={onCancelEdit}>
-                            Cancelar
-                          </Button>
-                          <Button type="button" onClick={() => onSaveEdit(item)} disabled={isSaving}>
-                            Salvar
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-              );
-            })}
-          </div>
+            <div className="flex justify-end">
+              <Button type="button" onClick={onSaveAll} disabled={isSaving}>
+                Salvar
+              </Button>
+            </div>
+          </>
         )}
       </CardContent>
     </Card>

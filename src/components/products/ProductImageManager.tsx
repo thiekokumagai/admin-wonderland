@@ -211,11 +211,11 @@ export function ProductImageManager({
           onChange={handleSelectFiles}
         />
 
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        <div className="flex gap-3 overflow-x-auto pb-2">
           {slots.map((slot) => {
             if (slot.type === "saved") {
               return (
-                <div key={slot.key} className="relative aspect-square overflow-hidden rounded-xl bg-muted">
+                <div key={slot.key} className="relative h-28 w-28 shrink-0 overflow-hidden rounded-xl bg-muted">
                   <img src={buildImageUrl(slot.image.url)} alt={`Imagem ${slot.index + 1}`} className="h-full w-full object-cover" />
                   <button
                     type="button"
@@ -241,7 +241,7 @@ export function ProductImageManager({
 
             if (slot.type === "pending") {
               return (
-                <div key={slot.key} className="relative aspect-square overflow-hidden rounded-xl bg-muted">
+                <div key={slot.key} className="relative h-28 w-28 shrink-0 overflow-hidden rounded-xl bg-muted">
                   <img src={slot.image.previewUrl} alt={slot.image.name} className="h-full w-full object-cover" />
                   <button
                     type="button"
@@ -261,7 +261,7 @@ export function ProductImageManager({
                 type="button"
                 onClick={() => inputRef.current?.click()}
                 disabled={remainingSlots === 0 || isUploading}
-                className="relative flex aspect-square items-center justify-center rounded-xl bg-muted text-muted-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                className="relative flex h-28 w-28 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <ImageIcon className="h-8 w-8" />
                 {remainingSlots > 0 ? (
