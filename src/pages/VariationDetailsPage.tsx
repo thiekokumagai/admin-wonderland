@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm, useFieldArray } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowLeft, Loader2, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Loader2, Plus, Trash2, GripVertical } from "lucide-react";
 import { useVariations } from "@/hooks/useVariations";
 import { createVariation, deleteVariation, updateVariation, updateVariationOrderBatch } from "@/services/variation.service";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,17 +13,18 @@ import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { toast } from "@/components/ui/use-toast";
 import type { VariationFormValues } from "@/types/variation";
-import { GripVertical } from "lucide-react";
+
 type OptionItem = {
-  id?: string; 
+  id?: string;
   value?: string;
 };
+
 const variationSchema = z.object({
   title: z.string().min(1, "Informe o nome da variação."),
   options: z
     .array(
       z.object({
-        id: z.string().optional(), 
+        id: z.string().optional(),
         value: z.string().min(1, "A opção não pode ficar vazia."),
       }),
     )
@@ -50,6 +51,7 @@ export default function VariationDetailsPage() {
   const [isSavingOrder, setIsSavingOrder] = useState(false);
   const saveTimeout = useRef<NodeJS.Timeout | null>(null);
   const isSavingOrderRef = useRef(false);
+
   const form = useForm<VariationFormSchema>({
     resolver: zodResolver(variationSchema),
     defaultValues,
@@ -73,7 +75,7 @@ export default function VariationDetailsPage() {
     if (variation) {
       form.reset({
         title: variation.title,
-        options: variation.options.length > 0 ? variation.options.map((option) => ({ id: option.id,value: option.value })) : [{ value: "" }],
+        options: variation.options.length > 0 ? variation.options.map((option) => ({ id: option.id, value: option.value })) : [{ value: "" }],
       });
       setLoaded(true);
     }
@@ -122,12 +124,13 @@ export default function VariationDetailsPage() {
       });
     },
   });
+
   const saveOrder = async (options: OptionItem[]) => {
     if (isSavingOrderRef.current) return;
-  
+
     isSavingOrderRef.current = true;
     setIsSavingOrder(true);
-  
+
     try {
       await updateVariationOrderBatch(
         options
@@ -146,17 +149,29 @@ export default function VariationDetailsPage() {
   const handleReorder = (fromId: string, toId: string) => {
     const fromIndex = fields.findIndex((item) => item.id === fromId);
     const toIndex = fields.findIndex((item) => item.id === toId);
-  
+
     if (fromIndex === -1 || toIndex === -1) return;
 
     move(fromIndex, toIndex);
-  
+
     if (saveTimeout.current) clearTimeout(saveTimeout.current);
-  
+
     saveTimeout.current = setTimeout(() => {
       saveOrder(form.getValues("options"));
     }, 300);
   };
+
+  if (!loaded && !isNewVariation) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <div className="flex items-center gap-3 text-muted-foreground">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          <span>Carregando variação...</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -177,109 +192,103 @@ export default function VariationDetailsPage() {
           <CardTitle>{isNewVariation ? "Cadastrar variação" : "Editar variação"}</CardTitle>
         </CardHeader>
         <CardContent>
-          {!loaded && !isNewVariation ? (
-            <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
-              Carregando variação...
-            </div>
-          ) : (
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit((values) => saveMutation.mutate(values))} className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="title"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Nome da variação</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Ex: Nicotina, Sabor, Tamanho" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit((values) => saveMutation.mutate(values))} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="title"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Nome da variação</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Ex: Nicotina, Sabor, Tamanho" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <FormLabel>Opções</FormLabel>
-                      {isSavingOrder ? (
-                        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          Salvando ordem...
-                        </span>
-                      ) : null}
-                    </div>
-                    <Button type="button" variant="outline" size="sm" onClick={() => append({ value: "" })}>
-                      <Plus className="mr-1 h-4 w-4" />
-                      Adicionar opção
-                    </Button>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <FormLabel>Opções</FormLabel>
+                    {isSavingOrder ? (
+                      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        Salvando ordem...
+                      </span>
+                    ) : null}
                   </div>
-
-                  {fields.map((field, index) => (
-                    <div
-                      key={field.id}
-                      draggable={!isSavingOrder}
-                      onDragStart={() => setDraggingId(field.id)}
-                      onDragOver={(e) => e.preventDefault()}
-                      onDrop={() => {
-                        if (draggingId) handleReorder(draggingId, field.id);
-                        setDraggingId(null);
-                      }}
-                      onDragEnd={() => setDraggingId(null)}
-                      className={draggingId === field.id ? "opacity-50" : ""}
-                    >
-                      <FormField
-                        control={form.control}
-                        name={`options.${index}.value`}
-                        render={({ field: optionField }) => (
-                          <FormItem>
-                            <div className="flex gap-2 items-center">
-                              <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab" />
-
-                              <FormControl>
-                                <Input {...optionField} />
-                              </FormControl>
-
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="text-destructive"
-                                onClick={() => remove(index)}
-                                disabled={fields.length === 1}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                  ))}
+                  <Button type="button" variant="outline" size="sm" onClick={() => append({ value: "" })}>
+                    <Plus className="mr-1 h-4 w-4" />
+                    Adicionar opção
+                  </Button>
                 </div>
 
-                <div className="flex flex-wrap gap-2">
-                  {isNewVariation || form.formState.dirtyFields.title ? (
-                    <Button type="submit" disabled={saveMutation.isPending}>
-                      {isNewVariation ? "Criar variação" : "Salvar alterações"}
-                    </Button>
-                  ) : null}
+                {fields.map((field, index) => (
+                  <div
+                    key={field.id}
+                    draggable={!isSavingOrder}
+                    onDragStart={() => setDraggingId(field.id)}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={() => {
+                      if (draggingId) handleReorder(draggingId, field.id);
+                      setDraggingId(null);
+                    }}
+                    onDragEnd={() => setDraggingId(null)}
+                    className={draggingId === field.id ? "opacity-50" : ""}
+                  >
+                    <FormField
+                      control={form.control}
+                      name={`options.${index}.value`}
+                      render={({ field: optionField }) => (
+                        <FormItem>
+                          <div className="flex gap-2 items-center">
+                            <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab" />
 
-                  {!isNewVariation ? (
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      onClick={() => deleteMutation.mutate()}
-                      disabled={deleteMutation.isPending}
-                    >
-                      Excluir variação
-                    </Button>
-                  ) : null}
-                </div>
-              </form>
-            </Form>
-          )}
+                            <FormControl>
+                              <Input {...optionField} />
+                            </FormControl>
+
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="text-destructive"
+                              onClick={() => remove(index)}
+                              disabled={fields.length === 1}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {isNewVariation || form.formState.dirtyFields.title ? (
+                  <Button type="submit" disabled={saveMutation.isPending}>
+                    {isNewVariation ? "Criar variação" : "Salvar alterações"}
+                  </Button>
+                ) : null}
+
+                {!isNewVariation ? (
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    onClick={() => deleteMutation.mutate()}
+                    disabled={deleteMutation.isPending}
+                  >
+                    Excluir variação
+                  </Button>
+                ) : null}
+              </div>
+            </form>
+          </Form>
         </CardContent>
       </Card>
     </div>

@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowLeft, Package2, Save, Shapes } from "lucide-react";
+import { ArrowLeft, Loader2, Package2, Save, Shapes } from "lucide-react";
 import { useCategories } from "@/hooks/useCategories";
 import { useProductItems } from "@/hooks/useProductItems";
 import { useProducts } from "@/hooks/useProducts";
@@ -162,6 +162,9 @@ export default function ProductDetailsPage() {
   );
 
   const currentProduct = (productsQuery.data ?? []).find((product) => product.id === productId);
+  const isInitialPageLoading =
+    !isNewProduct &&
+    (loadProductMutationPendingPlaceholder() || categoriesQuery.loading || variationsQuery.isLoading);
 
   const createProductMutation = useMutation({
     mutationFn: createProduct,
@@ -195,6 +198,10 @@ export default function ProductDetailsPage() {
       toast({ variant: "destructive", title: "Não foi possível carregar o produto" });
     },
   });
+
+  function loadProductMutationPendingPlaceholder() {
+    return loadProductMutation.isPending;
+  }
 
   const linkVariationsMutation = useMutation({
     mutationFn: async ({ currentProductId, variationIds }: { currentProductId: string; variationIds: string[] }) => {
@@ -570,6 +577,17 @@ export default function ProductDetailsPage() {
 
     updateStockBatchMutation.mutate(payload);
   };
+
+  if (isInitialPageLoading) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <div className="flex items-center gap-3 text-muted-foreground">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          <span>Carregando produto...</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

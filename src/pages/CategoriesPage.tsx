@@ -17,7 +17,6 @@ import {
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "@/components/ui/use-toast";
 
 import {
@@ -95,6 +94,7 @@ export default function CategoriesPage() {
   useEffect(() => {
     if (categories) setLocalCategories(categories);
   }, [categories]);
+
   useEffect(() => {
     return () => {
       if (saveTimeout.current) clearTimeout(saveTimeout.current);
@@ -109,6 +109,7 @@ export default function CategoriesPage() {
 
     return () => URL.revokeObjectURL(url);
   }, [file]);
+
   const saveOrder = async (items: CategoryList[]) => {
     if (isSavingOrderRef.current) return;
 
@@ -125,6 +126,7 @@ export default function CategoriesPage() {
       isSavingOrderRef.current = false;
     }
   };
+
   const handleReorder = (fromId: string, toId: string) => {
     if (fromId === toId) return;
     setLocalCategories((prev) => {
@@ -152,6 +154,7 @@ export default function CategoriesPage() {
       return updated;
     });
   };
+
   const openCreate = () => {
     setEditingCategory(null);
     setImagePreview("");
@@ -180,6 +183,7 @@ export default function CategoriesPage() {
 
     setOpen(true);
   };
+
   const onSubmit = async (data: CategoryFormData) => {
     setIsSaving(true);
 
@@ -224,15 +228,17 @@ export default function CategoriesPage() {
       setIsSaving(false);
     }
   };
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
 
-    setValue("file", file);
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const nextFile = e.target.files?.[0];
+    if (!nextFile) return;
+
+    setValue("file", nextFile);
     setRemoveImage(false);
 
-    setImagePreview(URL.createObjectURL(file));
+    setImagePreview(URL.createObjectURL(nextFile));
   };
+
   const handleDelete = async (id: string) => {
     if (!confirm("Tem certeza que deseja deletar?")) return;
     setLoadingId(id);
@@ -250,7 +256,20 @@ export default function CategoriesPage() {
       setLoadingId(null);
     }
   };
+
   const [loadingId, setLoadingId] = useState<string | null>(null);
+
+  if (loading && localCategories.length === 0) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <div className="flex items-center gap-3 text-muted-foreground">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          <span>Carregando categorias...</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -285,95 +304,82 @@ export default function CategoriesPage() {
         </div>
       </div>
 
-      <Card className="relative">
-        {loading && (
-          <div className="absolute inset-0 bg-white/60 backdrop-blur-sm flex items-center justify-center z-10">
-            <Loader2 className="h-6 w-6 animate-spin" />
-          </div>
-        )}
+      <Card>
         <CardContent className="p-0">
-          {loading ? (
-            <div className="p-6 space-y-3">
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead />
-                  <TableHead>Imagem</TableHead>
-                  <TableHead>Título</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead />
-                </TableRow>
-              </TableHeader>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead />
+                <TableHead>Imagem</TableHead>
+                <TableHead>Título</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead />
+              </TableRow>
+            </TableHeader>
 
-              <TableBody>
-                {localCategories.map((c) => (
-                  <TableRow
-                    key={c.id}
-                    draggable
-                    onDragStart={() => setDraggingId(c.id)}
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={() => {
-                      if (draggingId) handleReorder(draggingId, c.id);
-                      setDraggingId(null);
-                    }}
-                    onDragEnd={() => setDraggingId(null)}
-                    className={draggingId === c.id ? "opacity-50" : ""}
-                  >
-                    <TableCell>
-                      <GripVertical className="h-4 w-4 text-muted-foreground hover:cursor-grabbing" />
-                    </TableCell>
+            <TableBody>
+              {localCategories.map((c) => (
+                <TableRow
+                  key={c.id}
+                  draggable
+                  onDragStart={() => setDraggingId(c.id)}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={() => {
+                    if (draggingId) handleReorder(draggingId, c.id);
+                    setDraggingId(null);
+                  }}
+                  onDragEnd={() => setDraggingId(null)}
+                  className={draggingId === c.id ? "opacity-50" : ""}
+                >
+                  <TableCell>
+                    <GripVertical className="h-4 w-4 text-muted-foreground hover:cursor-grabbing" />
+                  </TableCell>
 
-                    <TableCell>
-                      {c.image ? (
-                        <img
-                          src={buildImageUrl(c.image)}
-                          className="h-10 w-10 rounded-full object-cover"
-                        />
+                  <TableCell>
+                    {c.image ? (
+                      <img
+                        src={buildImageUrl(c.image)}
+                        className="h-10 w-10 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="h-10 w-10 rounded-full bg-muted" />
+                    )}
+                  </TableCell>
+
+                  <TableCell>{c.title}</TableCell>
+
+                  <TableCell>
+                    <Badge variant={c.isVisible ? "default" : "secondary"}>
+                      {c.isVisible ? "Ativa" : "Inativa"}
+                    </Badge>
+                  </TableCell>
+
+                  <TableCell>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => openEdit(c)}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => handleDelete(c.id)}
+                      className="text-destructive"
+                      disabled={loadingId === c.id}
+                    >
+                      {loadingId === c.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
                       ) : (
-                        <div className="h-10 w-10 rounded-full bg-muted" />
+                        <Trash2 className="h-4 w-4" />
                       )}
-                    </TableCell>
-
-                    <TableCell>{c.title}</TableCell>
-
-                    <TableCell>
-                      <Badge variant={c.isVisible ? "default" : "secondary"}>
-                        {c.isVisible ? "Ativa" : "Inativa"}
-                      </Badge>
-                    </TableCell>
-
-                    <TableCell>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => openEdit(c)}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => handleDelete(c.id)}
-                        className="text-destructive"
-                        disabled={loadingId === c.id}
-                      >
-                        {loadingId === c.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Trash2 className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
 

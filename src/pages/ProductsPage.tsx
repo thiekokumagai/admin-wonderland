@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
+import { Loader2, Plus } from "lucide-react";
 import { useProducts } from "@/hooks/useProducts";
 import { useCategories } from "@/hooks/useCategories";
 import { ProductListCard } from "@/components/products/ProductListCard";
@@ -26,6 +26,7 @@ export default function ProductsPage() {
 
   const products = productsQuery.data ?? [];
   const categories = categoriesQuery.data ?? [];
+  const isPageLoading = productsQuery.isLoading || categoriesQuery.loading;
 
   const duplicateMutation = useMutation({
     mutationFn: async (product: ProductResponse) => {
@@ -96,6 +97,17 @@ export default function ProductsPage() {
     },
   });
 
+  if (isPageLoading) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <div className="flex items-center gap-3 text-muted-foreground">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          <span>Carregando produtos...</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -117,7 +129,7 @@ export default function ProductsPage() {
       <ProductListCard
         products={products}
         categories={categories}
-        isLoading={productsQuery.isLoading || categoriesQuery.loading}
+        isLoading={false}
         onDuplicate={(product) => duplicateMutation.mutate(product)}
         onDelete={(product) => deleteMutation.mutate(product.id)}
         isDuplicating={duplicateMutation.isPending}
