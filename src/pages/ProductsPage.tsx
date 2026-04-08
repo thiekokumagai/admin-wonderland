@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/use-toast";
 import {
   createProduct,
+  deleteProduct,
   getProductById,
   getProductItems,
   linkProductVariations,
@@ -81,6 +82,20 @@ export default function ProductsPage() {
     },
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (productId: string) => deleteProduct(productId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+      toast({ title: "Produto excluído com sucesso" });
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: error.message || "Não foi possível excluir o produto",
+      });
+    },
+  });
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -104,7 +119,9 @@ export default function ProductsPage() {
         categories={categories}
         isLoading={productsQuery.isLoading || categoriesQuery.loading}
         onDuplicate={(product) => duplicateMutation.mutate(product)}
+        onDelete={(product) => deleteMutation.mutate(product.id)}
         isDuplicating={duplicateMutation.isPending}
+        isDeleting={deleteMutation.isPending}
       />
     </div>
   );

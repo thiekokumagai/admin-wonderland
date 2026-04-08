@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Cropper, { type Area } from "react-easy-crop";
-import { Crop, ImagePlus, Trash2, Upload } from "lucide-react";
+import { Crop, ImagePlus } from "lucide-react";
 import { buildImageUrl } from "@/utils/image-url";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -27,10 +27,8 @@ type ProductImageManagerProps = {
   isUploading: boolean;
   isDeletingImage: boolean;
   isUpdatingImage?: boolean;
-  canUpload: boolean;
   onPendingImagesChange: (files: File[]) => void;
   onRemovePendingImage: (id: string) => void;
-  onUpload: () => void;
   onDeleteImage: (imageId: string) => void;
   onReplaceImage?: (imageId: string, file: File) => Promise<void> | void;
 };
@@ -100,38 +98,32 @@ export function ProductImageManager({
   isUploading,
   isDeletingImage,
   isUpdatingImage = false,
-  canUpload,
   onPendingImagesChange,
   onRemovePendingImage,
-  onUpload,
   onDeleteImage,
   onReplaceImage,
 }: ProductImageManagerProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const [cropIndex, setCropIndex] = useState<number | null>(null);
   const [savedCropTarget, setSavedCropTarget] = useState<SavedImageCropTarget | null>(null);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
   const [isCropping, setIsCropping] = useState(false);
 
-  const currentCropImage = useMemo(
-    () => (cropIndex !== null ? pendingImages[cropIndex] ?? null : null),
-    [cropIndex, pendingImages],
+  const cropImageUrl = useMemo(
+    () => (savedCropTarget ? buildImageUrl(savedCropTarget.url) : null),
+    [savedCropTarget],
   );
 
-  const cropImageUrl = currentCropImage?.previewUrl ?? (savedCropTarget ? buildImageUrl(savedCropTarget.url) : null);
-
   useEffect(() => {
-    if (cropIndex !== null || savedCropTarget) {
+    if (savedCropTarget) {
       setCrop({ x: 0, y: 0 });
       setZoom(1);
       setCroppedAreaPixels(null);
     }
-  }, [cropIndex, savedCropTarget]);
+  }, [savedCropTarget]);
 
   const closeCropDialog = () => {
-    setCropIndex(null);
     setSavedCropTarget(null);
   };
 
@@ -144,35 +136,23 @@ export function ProductImageManager({
     const nextFiles = [...pendingImages.map((image) => image.file), ...files];
     onPendingImagesChange(nextFiles);
     event.target.value = "";
-    setCropIndex(pendingImages.length);
-    setSavedCropTarget(null);
   };
 
   const handleApplyCrop = useCallback(async () => {
-    if (!croppedAreaPixels) {
+    if (!croppedAreaPixels || !savedCropTarget || !onReplaceImage) {
       return;
     }
 
     setIsCropping(true);
 
     try {
-      if (currentCropImage && cropIndex !== null) {
-        const cropped = await getCroppedFile(currentCropImage.file, croppedAreaPixels);
-        const nextFiles = pendingImages.map((image, index) => (index === cropIndex ? cropped : image.file));
-        onPendingImagesChange(nextFiles);
-        closeCropDialog();
-        return;
-      }
-
-      if (savedCropTarget && onReplaceImage) {
-        const cropped = await getCroppedFileFromUrl(
-          buildImageUrl(savedCropTarget.url),
-          croppedAreaPixels,
-          `cropped-${savedCropTarget.id}.jpg`,
-        );
-        await onReplaceImage(savedCropTarget.id, cropped);
-        closeCropDialog();
-      }
+      const cropped = await getCroppedFileFromUrl(
+        buildImageUrl(savedCropTarget.url),
+        croppedAreaPixels,
+        `cropped-${savedCropTarget.id}.jpg`,
+      );
+      await onReplaceImage(savedCropTarget.id, cropped);
+      closeCropDialog();
     } catch {
       toast({
         variant: "destructive",
@@ -181,7 +161,9 @@ export function ProductImageManager({
     } finally {
       setIsCropping(false);
     }
-  }, [cropIndex, croppedAreaPixels, currentCropImage, onPendingImagesChange, onReplaceImage, pendingImages, savedCropTarget]);
+  }, [croppedAreaPixels, onReplaceImage, savedCropTarget]);
+
+  const showSavedGallery = images.length > 0;
 
   return (
     <Card className="rounded-3xl">
@@ -198,76 +180,94 @@ export function ProductImageManager({
           onChange={handleSelectFiles}
         />
 
-        <div className="rounded-3xl border bg-background p-4">
-          <div className="flex flex-wrap gap-3">
+        {showSavedGallery ? (
+          <div className="rounded-3xl border bg-background p-4">
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={() => inputRef.current?.click()}
+                className="flex h-28 w-28 flex-col items-center justify-center rounded-2xl border-2 border-dashed border-primary/40 bg-primary/5 text-center transition-colors hover:bg-primary/10"
+                disabled={isUploading}
+              >
+                <ImagePlus className="mb-2 h-5 w-5 text-primary" />
+                <span className="text-xs font-medium text-primary">Adicionar</span>
+              </button>
+
+              {images.map((image) => (
+                <div key={image.id} className="group relative h-28 w-28 overflow-hidden rounded-2xl border bg-muted">
+                  <img src={buildImageUrl(image.url)} alt="Imagem do produto" className="h-full w-full object-cover" />
+                  <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-black/55 p-2 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+                    {onReplaceImage ? (
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => setSavedCropTarget({ id: image.id, url: image.url })}
+                        disabled={isUpdatingImage || isDeletingImage}
+                      >
+                        <Crop className="h-3.5 w-3.5" />
+                      </Button>
+                    ) : null}
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="sm"
+                      className="h-7 rounded-md px-2 text-[11px]"
+                      onClick={() => onDeleteImage(image.id)}
+                      disabled={isDeletingImage || isUpdatingImage}
+                    >
+                      Excluir
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-3xl border border-dashed bg-background p-8 text-center">
             <button
               type="button"
               onClick={() => inputRef.current?.click()}
-              className="flex h-28 w-28 flex-col items-center justify-center rounded-2xl border-2 border-dashed border-primary/40 bg-primary/5 text-center transition-colors hover:bg-primary/10"
+              className="mx-auto flex w-full max-w-sm flex-col items-center justify-center rounded-2xl border-2 border-dashed border-primary/40 bg-primary/5 px-6 py-10 text-center transition-colors hover:bg-primary/10"
+              disabled={isUploading}
             >
-              <ImagePlus className="mb-2 h-5 w-5 text-primary" />
-              <span className="text-xs font-medium text-primary">Clique para enviar</span>
+              <ImagePlus className="mb-3 h-6 w-6 text-primary" />
+              <span className="text-sm font-semibold text-primary">Clique para enviar imagens</span>
+              <span className="mt-1 text-xs text-muted-foreground">As imagens novas são enviadas direto, sem crop.</span>
             </button>
+          </div>
+        )}
 
-            {pendingImages.map((image, index) => (
-              <div key={image.id} className="group relative h-28 w-28 overflow-hidden rounded-2xl border bg-muted">
-                <img src={image.previewUrl} alt={image.name} className="h-full w-full object-cover" />
-                <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-black/55 p-2 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
-                  <Button type="button" variant="secondary" size="icon" className="h-7 w-7" onClick={() => setCropIndex(index)}>
-                    <Crop className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button type="button" variant="destructive" size="sm" className="h-7 rounded-md px-2 text-[11px]" onClick={() => onRemovePendingImage(image.id)}>
-                    Remove
-                  </Button>
-                </div>
-              </div>
-            ))}
-
-            {images.map((image) => (
-              <div key={image.id} className="group relative h-28 w-28 overflow-hidden rounded-2xl border bg-muted">
-                <img src={buildImageUrl(image.url)} alt="Imagem do produto" className="h-full w-full object-cover" />
-                <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-black/55 p-2 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
-                  {onReplaceImage ? (
+        {!showSavedGallery && pendingImages.length > 0 ? (
+          <div className="space-y-3 rounded-3xl border bg-background p-4">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-medium">Enviando imagens...</p>
+              <span className="text-xs text-muted-foreground">{pendingImages.length} arquivo(s)</span>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              {pendingImages.map((image) => (
+                <div key={image.id} className="group relative h-28 w-28 overflow-hidden rounded-2xl border bg-muted">
+                  <img src={image.previewUrl} alt={image.name} className="h-full w-full object-cover" />
+                  <div className="absolute inset-x-0 bottom-0 flex items-center justify-center bg-black/55 p-2 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
                     <Button
                       type="button"
-                      variant="secondary"
-                      size="icon"
-                      className="h-7 w-7"
-                      onClick={() => {
-                        setSavedCropTarget({ id: image.id, url: image.url });
-                        setCropIndex(null);
-                      }}
-                      disabled={isUpdatingImage}
+                      variant="destructive"
+                      size="sm"
+                      className="h-7 rounded-md px-2 text-[11px]"
+                      onClick={() => onRemovePendingImage(image.id)}
+                      disabled={isUploading}
                     >
-                      <Crop className="h-3.5 w-3.5" />
+                      Excluir
                     </Button>
-                  ) : null}
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    size="sm"
-                    className="h-7 rounded-md px-2 text-[11px]"
-                    onClick={() => onDeleteImage(image.id)}
-                    disabled={isDeletingImage || isUpdatingImage}
-                  >
-                    Remove
-                  </Button>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {canUpload ? (
-          <div className="flex justify-end">
-            <Button type="button" onClick={onUpload} disabled={isUploading}>
-              <Upload className="mr-2 h-4 w-4" />
-              Enviar imagens
-            </Button>
+              ))}
+            </div>
           </div>
         ) : null}
 
-        <Dialog open={cropIndex !== null || !!savedCropTarget} onOpenChange={(open) => !open && closeCropDialog()}>
+        <Dialog open={!!savedCropTarget} onOpenChange={(open) => !open && closeCropDialog()}>
           <DialogContent className="max-w-3xl">
             <DialogHeader>
               <DialogTitle>Recortar imagem</DialogTitle>

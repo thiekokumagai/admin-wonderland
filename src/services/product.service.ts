@@ -86,6 +86,12 @@ export async function getProductById(id: string): Promise<ProductResponse> {
   return normalizeProduct(data);
 }
 
+export async function deleteProduct(id: string): Promise<void> {
+  await apiFetch(`/products/${id}`, {
+    method: "DELETE",
+  });
+}
+
 export async function uploadProductImages(productId: string, files: File[]): Promise<ProductResponse> {
   const body = new FormData();
   files.forEach((file) => body.append("files", file));
@@ -119,7 +125,6 @@ export async function deleteProductImage(productId: string, imageId: string): Pr
 }
 
 export async function linkProductVariations(productId: string, variationIds: string[]): Promise<ProductResponse> {
-
   const response = await apiFetch(`/products/${productId}/variations`, {
     method: "POST",
     body: JSON.stringify({

@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { ArrowRight, Copy, Images, Package, Search } from "lucide-react";
+import { ArrowRight, Copy, Images, Package, Search, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { buildImageUrl } from "@/utils/image-url";
 import { Card, CardContent } from "@/components/ui/card";
@@ -15,10 +15,20 @@ type ProductListCardProps = {
   categories: CategoryList[];
   isLoading: boolean;
   onDuplicate: (product: ProductResponse) => void;
+  onDelete: (product: ProductResponse) => void;
   isDuplicating: boolean;
+  isDeleting: boolean;
 };
 
-export function ProductListCard({ products, categories, isLoading, onDuplicate, isDuplicating }: ProductListCardProps) {
+export function ProductListCard({
+  products,
+  categories,
+  isLoading,
+  onDuplicate,
+  onDelete,
+  isDuplicating,
+  isDeleting,
+}: ProductListCardProps) {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
 
@@ -105,7 +115,6 @@ export function ProductListCard({ products, categories, isLoading, onDuplicate, 
                           {product.images.length} foto(s)
                         </span>
                         <span>{product.itemsCount} SKU(s)</span>
-                        <span className="truncate">ID: {product.id}</span>
                       </div>
                     </div>
                   </div>
@@ -117,10 +126,21 @@ export function ProductListCard({ products, categories, isLoading, onDuplicate, 
                       size="sm"
                       className="rounded-xl"
                       onClick={() => onDuplicate(product)}
-                      disabled={isDuplicating}
+                      disabled={isDuplicating || isDeleting}
                     >
                       <Copy className="mr-2 h-4 w-4" />
                       Duplicar
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="sm"
+                      className="rounded-xl"
+                      onClick={() => onDelete(product)}
+                      disabled={isDeleting || isDuplicating}
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Excluir
                     </Button>
                     <Button asChild size="sm" className="rounded-xl">
                       <Link to={`/produtos/${product.id}`}>

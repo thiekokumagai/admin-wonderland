@@ -1,15 +1,12 @@
 import { Layers3 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Button } from "@/components/ui/button";
 import type { Variation } from "@/types/variation";
 
 type ProductVariationSelectorProps = {
   variations: Variation[];
   selectedVariationIds: string[];
   onToggle: (variationId: string, checked: boolean) => void;
-  onSave: () => void;
-  isSaving: boolean;
   disabled: boolean;
 };
 
@@ -17,8 +14,6 @@ export function ProductVariationSelector({
   variations,
   selectedVariationIds,
   onToggle,
-  onSave,
-  isSaving,
   disabled,
 }: ProductVariationSelectorProps) {
   return (
@@ -41,7 +36,7 @@ export function ProductVariationSelector({
                   key={variation.id}
                   className={`flex cursor-pointer items-start gap-3 rounded-2xl border p-4 transition-colors ${
                     checked ? "border-primary bg-primary/5" : "bg-card hover:bg-muted/50"
-                  }`}
+                  } ${disabled ? "cursor-not-allowed opacity-60" : ""}`}
                 >
                   <Checkbox
                     checked={checked}
@@ -62,12 +57,6 @@ export function ProductVariationSelector({
             })}
           </div>
         )}
-
-        <div className="flex justify-end">
-          <Button onClick={onSave} disabled={disabled || isSaving} className="rounded-xl">
-            Salvar variações
-          </Button>
-        </div>
       </CardContent>
     </Card>
   );
