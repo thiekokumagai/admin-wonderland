@@ -119,88 +119,73 @@ export function ProductImageManager({
   }, [cropIndex, croppedAreaPixels, currentCropImage, onPendingImagesChange, pendingImages]);
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>2. Imagens do Produto</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <input
-          ref={inputRef}
-          type="file"
-          accept="image/*"
-          multiple
-          className="hidden"
-          onChange={handleSelectFiles}
-        />
+    <Card className="rounded-3xl">
+    <CardHeader>
+      <CardTitle className="text-xl">Galeria do produto</CardTitle>
+    </CardHeader>
+    <CardContent className="space-y-5">
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={handleSelectFiles}
+      />
 
-        <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="outline" onClick={() => inputRef.current?.click()}>
-            <ImagePlus className="mr-2 h-4 w-4" />
-            Selecionar imagens
+      <div className="rounded-3xl border bg-background p-4">
+        <div className="flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            className="flex h-28 w-28 flex-col items-center justify-center rounded-2xl border-2 border-dashed border-primary/40 bg-primary/5 text-center transition-colors hover:bg-primary/10"
+          >
+            <ImagePlus className="mb-2 h-5 w-5 text-primary" />
+            <span className="text-xs font-medium text-primary">Clique para enviar</span>
+          </button>
+
+          {pendingImages.map((image, index) => (
+            <div key={image.id} className="group relative h-28 w-28 overflow-hidden rounded-2xl border bg-muted">
+              <img src={image.previewUrl} alt={image.name} className="h-full w-full object-cover" />
+              <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-black/55 p-2 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+                <Button type="button" variant="secondary" size="icon" className="h-7 w-7" onClick={() => setCropIndex(index)}>
+                  <Crop className="h-3.5 w-3.5" />
+                </Button>
+                <Button type="button" variant="destructive" size="sm" className="h-7 rounded-md px-2 text-[11px]" onClick={() => onRemovePendingImage(image.id)}>
+                  Remove
+                </Button>
+              </div>
+            </div>
+          ))}
+
+          {images.map((image) => (
+            <div key={image.id} className="group relative h-28 w-28 overflow-hidden rounded-2xl border bg-muted">
+              <img src={buildImageUrl(image.url)} alt="Imagem do produto" className="h-full w-full object-cover" />
+              <div className="absolute inset-x-0 bottom-0 flex items-center justify-center bg-black/55 p-2 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  className="h-7 rounded-md px-2 text-[11px]"
+                  onClick={() => onDeleteImage(image.id)}
+                  disabled={isDeletingImage}
+                >
+                  Remove
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {canUpload ? (
+        <div className="flex justify-end">
+          <Button type="button" onClick={onUpload} disabled={isUploading}>
+            <Upload className="mr-2 h-4 w-4" />
+            Enviar imagens
           </Button>
-          {canUpload ? (
-            <Button type="button" onClick={onUpload} disabled={isUploading}>
-              <Upload className="mr-2 h-4 w-4" />
-              Enviar imagens
-            </Button>
-          ) : null}
         </div>
-
-        {pendingImages.length > 0 ? (
-          <div className="space-y-3">
-            <p className="text-sm font-medium">Imagens prontas para envio</p>
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              {pendingImages.map((image, index) => (
-                <div key={image.id} className="overflow-hidden rounded-xl border">
-                  <div className="aspect-square bg-muted">
-                    <img src={image.previewUrl} alt={image.name} className="h-full w-full object-cover" />
-                  </div>
-                  <div className="flex items-center justify-between gap-2 p-3">
-                    <span className="truncate text-xs text-muted-foreground">{image.name}</span>
-                    <div className="flex gap-1">
-                      <Button type="button" variant="ghost" size="icon" onClick={() => setCropIndex(index)}>
-                        <Crop className="h-4 w-4" />
-                      </Button>
-                      <Button type="button" variant="ghost" size="icon" onClick={() => onRemovePendingImage(image.id)}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
-        <div className="space-y-3">
-          <p className="text-sm font-medium">Imagens salvas</p>
-          {images.length === 0 ? (
-            <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
-              Nenhuma imagem enviada ainda.
-            </div>
-          ) : (
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              {images.map((image) => (
-                <div key={image.id} className="overflow-hidden rounded-xl border">
-                  <div className="aspect-square bg-muted">
-                    <img src={buildImageUrl(image.url)} alt="Imagem do produto" className="h-full w-full object-cover" />
-                  </div>
-                  <div className="flex justify-end p-3">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => onDeleteImage(image.id)}
-                      disabled={isDeletingImage}
-                    >
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+      ) : null}
 
         <Dialog open={cropIndex !== null} onOpenChange={(open) => !open && setCropIndex(null)}>
           <DialogContent className="max-w-3xl">

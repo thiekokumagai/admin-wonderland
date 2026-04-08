@@ -437,55 +437,13 @@ export default function ProductDetailsPage() {
         </TabsList>
 
         <TabsContent value="produto" className="space-y-6">
-          <div className="grid gap-6 xl:grid-cols-[1.1fr_1fr]">
-            <div className="space-y-6">
-              <ProductDetailsForm
-                form={productForm}
-                categories={categories}
-                onSubmit={() => undefined}
-                isSaving={createProductMutation.isPending || loadProductMutation.isPending}
-                productId={productId}
-              />
-            </div>
-
-            <div className="space-y-6">
-              <Card className="rounded-3xl border-0 bg-muted/20 shadow-none">
-                <CardHeader>
-                  <CardTitle className="text-lg">Resumo rápido</CardTitle>
-                </CardHeader>
-                <CardContent className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
-                  <div className="rounded-2xl bg-card p-4">
-                    <p className="text-sm text-muted-foreground">Categoria</p>
-                    <p className="mt-1 font-medium">
-                      {categories.find((category) => category.id === productForm.watch("categoryId"))?.title ?? "Não selecionada"}
-                    </p>
-                  </div>
-                  <div className="rounded-2xl bg-card p-4">
-                    <p className="text-sm text-muted-foreground">Imagens</p>
-                    <p className="mt-1 font-medium">{images.length + pendingImages.length} no total</p>
-                  </div>
-                  <div className="rounded-2xl bg-card p-4">
-                    <p className="text-sm text-muted-foreground">Variações</p>
-                    <p className="mt-1 font-medium">{selectedVariationIds.length} vinculadas</p>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="rounded-3xl border-0 bg-muted/20 shadow-none">
-                <CardHeader>
-                  <CardTitle className="text-lg">Salvar seção</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <Button type="button" className="w-full rounded-xl" onClick={() => void handleSaveProductSection()}>
-                    Salvar título, categoria e imagens
-                  </Button>
-                  <p className="text-xs text-muted-foreground">
-                    Um único botão salva o produto e também envia as imagens pendentes.
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
+          <ProductDetailsForm
+            form={productForm}
+            categories={categories}
+            onSubmit={() => void handleSaveProductSection()}
+            isSaving={createProductMutation.isPending || loadProductMutation.isPending || uploadImagesMutation.isPending}
+            productId={productId}
+          />
 
           <ProductImageManager
             images={images}
