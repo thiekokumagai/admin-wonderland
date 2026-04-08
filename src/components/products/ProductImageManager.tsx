@@ -201,7 +201,7 @@ export function ProductImageManager({
           Editar imagem
         </Button>
       </CardHeader>
-      <CardContent className="space-y-5">
+      <CardContent className="space-y-4">
         <input
           ref={inputRef}
           type="file"
@@ -211,28 +211,28 @@ export function ProductImageManager({
           onChange={handleSelectFiles}
         />
 
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+        <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5">
           {slots.map((slot) => {
             if (slot.type === "saved") {
               return (
-                <div key={slot.key} className="relative overflow-hidden rounded-2xl bg-muted aspect-square">
+                <div key={slot.key} className="relative h-20 overflow-hidden rounded-xl bg-muted sm:h-24">
                   <img src={buildImageUrl(slot.image.url)} alt={`Imagem ${slot.index + 1}`} className="h-full w-full object-cover" />
                   <button
                     type="button"
                     onClick={() => onDeleteImage(slot.image.id)}
                     disabled={isDeletingImage || isUpdatingImage}
-                    className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground"
+                    className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground"
                   >
-                    <X className="h-4 w-4" />
+                    <X className="h-3.5 w-3.5" />
                   </button>
                   {onReplaceImage ? (
                     <button
                       type="button"
                       onClick={() => setSavedCropTarget({ id: slot.image.id, url: slot.image.url })}
                       disabled={isUpdatingImage || isDeletingImage}
-                      className="absolute right-2 bottom-2 flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground"
+                      className="absolute right-1 bottom-1 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground"
                     >
-                      <Crop className="h-4 w-4" />
+                      <Crop className="h-3.5 w-3.5" />
                     </button>
                   ) : null}
                 </div>
@@ -241,15 +241,15 @@ export function ProductImageManager({
 
             if (slot.type === "pending") {
               return (
-                <div key={slot.key} className="relative overflow-hidden rounded-2xl bg-muted aspect-square">
+                <div key={slot.key} className="relative h-20 overflow-hidden rounded-xl bg-muted sm:h-24">
                   <img src={slot.image.previewUrl} alt={slot.image.name} className="h-full w-full object-cover" />
                   <button
                     type="button"
                     onClick={() => onRemovePendingImage(slot.image.id)}
                     disabled={isUploading}
-                    className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground"
+                    className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground"
                   >
-                    <X className="h-4 w-4" />
+                    <X className="h-3.5 w-3.5" />
                   </button>
                 </div>
               );
@@ -261,12 +261,12 @@ export function ProductImageManager({
                 type="button"
                 onClick={() => inputRef.current?.click()}
                 disabled={remainingSlots === 0 || isUploading}
-                className="relative flex aspect-square items-center justify-center rounded-2xl bg-muted text-muted-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                className="relative flex h-20 items-center justify-center rounded-xl bg-muted text-muted-foreground disabled:cursor-not-allowed disabled:opacity-60 sm:h-24"
               >
-                <ImageIcon className="h-14 w-14" />
+                <ImageIcon className="h-8 w-8" />
                 {remainingSlots > 0 ? (
-                  <span className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                    <Plus className="h-4 w-4" />
+                  <span className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                    <Plus className="h-3.5 w-3.5" />
                   </span>
                 ) : null}
               </button>

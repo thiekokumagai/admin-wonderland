@@ -1,4 +1,4 @@
-import { CheckSquare, Plus, Square } from "lucide-react";
+import { CheckSquare, Plus, Square, Trash2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -12,6 +12,7 @@ type ProductVariationSelectorProps = {
   selectedOptionsByVariation: Record<string, string[]>;
   onChangeVariation: (slot: number, variationId: string) => void;
   onAddSlot: () => void;
+  onRemoveSlot: (slot: number) => void;
   onToggleOption: (variationId: string, optionId: string, checked: boolean) => void;
   onToggleAllOptions: (variationId: string, checked: boolean) => void;
   disabled: boolean;
@@ -27,6 +28,7 @@ export function ProductVariationSelector({
   selectedOptionsByVariation,
   onChangeVariation,
   onAddSlot,
+  onRemoveSlot,
   onToggleOption,
   onToggleAllOptions,
   disabled,
@@ -54,11 +56,27 @@ export function ProductVariationSelector({
               const selectedVariation = getSelectedVariation(variations, selectedVariationId);
               const selectedOptionIds = selectedVariation ? selectedOptionsByVariation[selectedVariation.id] ?? [] : [];
               const allChecked = !!selectedVariation && selectedVariation.options.length > 0 && selectedOptionIds.length === selectedVariation.options.length;
+              const canRemove = slots > 1;
 
               return (
                 <div key={`variation-slot-${index}`} className="space-y-4 rounded-3xl bg-background p-4">
                   <div className="space-y-2">
-                    <Label>Variação {index + 1}</Label>
+                    <div className="flex items-center justify-between gap-2">
+                      <Label>Variação {index + 1}</Label>
+                      {canRemove ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => onRemoveSlot(index)}
+                          disabled={disabled}
+                          className="text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      ) : null}
+                    </div>
+
                     <div className="flex flex-col gap-2 sm:flex-row">
                       <Select
                         value={selectedVariationId}

@@ -14,6 +14,7 @@ import {
   createProductItems,
   deleteProductImage,
   getProductById,
+  getProductItems,
   linkProductVariations,
   replaceProductImage,
   updateProductItem,
@@ -29,7 +30,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/components/ui/use-toast";
-import type { CreateProductItemPayload, ProductImage, ProductItem } from "@/types/product";
+import type { ProductImage, ProductItem } from "@/types/product";
 import type { Variation } from "@/types/variation";
 
 const productSchema = z.object({
@@ -42,13 +43,6 @@ type PendingImage = {
   name: string;
   previewUrl: string;
   file: File;
-};
-
-type DraftItem = {
-  id: string;
-  optionIds: string[];
-  labels: string[];
-  stock: number;
 };
 
 type QuickEditMode = "add" | "subtract" | "replace";
@@ -109,7 +103,6 @@ export default function ProductDetailsPage() {
   const [selectedVariationIds, setSelectedVariationIds] = useState<string[]>([]);
   const [selectedOptionsByVariation, setSelectedOptionsByVariation] = useState<Record<string, string[]>>({});
   const [pendingImages, setPendingImages] = useState<PendingImage[]>([]);
-  const [draftItems, setDraftItems] = useState<DraftItem[]>([]);
   const [quickEditItemId, setQuickEditItemId] = useState<string | null>(null);
   const [quickEditMode, setQuickEditMode] = useState<QuickEditMode>("add");
   const [quickEditValue, setQuickEditValue] = useState("");
@@ -128,21 +121,6 @@ export default function ProductDetailsPage() {
     () => selectedVariationIds.map((variationId) => variations.find((variation) => variation.id === variationId)).filter((variation): variation is Variation => !!variation),
     [selectedVariationIds, variations],
   );
-
-  const combinationPreview = useMemo(() => {
-    const variationsWithSelections = selectedVariations
-      .map((variation) => ({
-        variation,
-        optionIds: selectedOptionsByVariation[variation.id] ?? [],
-      }))
-      .filter((entry) => entry.optionIds.length > 0);
-
-    if (variationsWithSelections.length !== selectedVariations.length || variationsWithSelections.length === 0) {
-      return [];
-    }
-
-    return getOptionCombinations(variationsWithSelections);
-  }, [selectedOptionsByVariation, selectedVariations]);
 
   const currentProduct = (productsQuery.data ?? []).find((product) => product.id === productId);
 
@@ -179,7 +157,16 @@ export default function ProductDetailsPage() {
 
   const linkVariationsMutation = useMutation({
     mutationFn: async ({ currentProductId, variationIds }: { currentProductId: string; variationIds: string[] }) => {
-      const product = await linkProductVariations(currentProductId, variationIds);
+      const currentProductData = await getProductById(currentProductId);
+      const alreadyLinkedVariationIds = currentProductData.variationIds;
+
+      const newVariationIds = variationIds.filter((variationId) => !alreadyLinkedVariationIds.includes(variationId));
+
+      let product = currentProductData;
+
+      if (newVariationIds.length > 0) {
+        product = await linkProductVariations(currentProductId, newVariationIds);
+      }
 
       const variationsWithSelections = variationIds
         .map((variationId) => {
@@ -194,7 +181,7 @@ export default function ProductDetailsPage() {
         const existingItems = await getProductItems(currentProductId);
         const existingHashes = new Set(existingItems.map((item) => buildOptionHash(item.options.map((option) => option.optionId))));
 
-        const itemsToCreate: CreateProductItemPayload[] = combinations
+        const itemsToCreate = combinations
           .filter((combination) => !existingHashes.has(buildOptionHash(combination.optionIds)))
           .map((combination) => ({
             options: combination.optionIds,
@@ -340,6 +327,7 @@ export default function ProductDetailsPage() {
 
   const handleChangeVariation = (slot: number, variationId: string) => {
     const nextVariationIds = [...selectedVariationIds];
+    const previousVariationId = nextVariationIds[slot];
     nextVariationIds[slot] = variationId;
 
     const cleanedVariationIds = nextVariationIds.filter(Boolean);
@@ -347,11 +335,17 @@ export default function ProductDetailsPage() {
 
     setSelectedOptionsByVariation((prev) => {
       const next = { ...prev };
+
+      if (previousVariationId && previousVariationId !== variationId) {
+        delete next[previousVariationId];
+      }
+
       Object.keys(next).forEach((key) => {
         if (!cleanedVariationIds.includes(key)) {
           delete next[key];
         }
       });
+
       return next;
     });
   };
@@ -362,6 +356,21 @@ export default function ProductDetailsPage() {
     }
 
     setSelectedVariationIds((prev) => [...prev, ""]);
+  };
+
+  const handleRemoveVariationSlot = (slot: number) => {
+    const variationIdToRemove = selectedVariationIds[slot];
+    const nextVariationIds = selectedVariationIds.filter((_, index) => index !== slot);
+
+    setSelectedVariationIds(nextVariationIds);
+
+    if (variationIdToRemove) {
+      setSelectedOptionsByVariation((prev) => {
+        const next = { ...prev };
+        delete next[variationIdToRemove];
+        return next;
+      });
+    }
   };
 
   const handleToggleVariationOption = (variationId: string, optionId: string, checked: boolean) => {
@@ -516,6 +525,7 @@ export default function ProductDetailsPage() {
             selectedOptionsByVariation={selectedOptionsByVariation}
             onChangeVariation={handleChangeVariation}
             onAddSlot={handleAddVariationSlot}
+            onRemoveSlot={handleRemoveVariationSlot}
             onToggleOption={handleToggleVariationOption}
             onToggleAllOptions={handleToggleAllVariationOptions}
             disabled={!productId || linkVariationsMutation.isPending}
