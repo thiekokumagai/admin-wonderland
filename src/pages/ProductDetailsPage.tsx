@@ -15,9 +15,11 @@ import {
   deleteProductImage,
   getProductById,
   linkProductVariations,
+  replaceProductImage,
   updateProductItem,
   uploadProductImages,
 } from "@/services/product.service";
+
 import { ProductDetailsForm, type ProductDetailsFormValues } from "@/components/products/ProductDetailsForm";
 import { ProductVariationSelector } from "@/components/products/ProductVariationSelector";
 import { ProductImageManager } from "@/components/products/ProductImageManager";
@@ -181,7 +183,21 @@ export default function ProductDetailsPage() {
     },
   });
 
+  const replaceImageMutation = useMutation({
+    mutationFn: ({ currentProductId, imageId, file }: { currentProductId: string; imageId: string; file: File }) =>
+      replaceProductImage(currentProductId, imageId, file),
+    onSuccess: (product) => {
+      setImages(product.images);
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+      toast({ title: "Imagem atualizada" });
+    },
+    onError: () => {
+      toast({ variant: "destructive", title: "Não foi possível atualizar a imagem" });
+    },
+  });
+
   const saveItemsMutation = useMutation({
+
     mutationFn: ({ currentProductId, items }: { currentProductId: string; items: CreateProductItemPayload[] }) =>
       createProductItems(currentProductId, items),
     onSuccess: async () => {
@@ -450,6 +466,7 @@ export default function ProductDetailsPage() {
             pendingImages={pendingImages}
             isUploading={uploadImagesMutation.isPending}
             isDeletingImage={deleteImageMutation.isPending}
+            isUpdatingImage={replaceImageMutation.isPending}
             canUpload={false}
             onPendingImagesChange={handlePendingImagesChange}
             onRemovePendingImage={handleRemovePendingImage}
@@ -459,6 +476,12 @@ export default function ProductDetailsPage() {
                 return;
               }
               deleteImageMutation.mutate({ currentProductId: productId, imageId });
+            }}
+            onReplaceImage={async (imageId, file) => {
+              if (!productId) {
+                return;
+              }
+              await replaceImageMutation.mutateAsync({ currentProductId: productId, imageId, file });
             }}
           />
         </TabsContent>

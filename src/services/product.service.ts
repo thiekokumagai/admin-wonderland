@@ -99,6 +99,19 @@ export async function uploadProductImages(productId: string, files: File[]): Pro
   return normalizeProduct(data);
 }
 
+export async function replaceProductImage(productId: string, imageId: string, file: File): Promise<ProductResponse> {
+  const body = new FormData();
+  body.append("file", file);
+
+  const response = await apiFetch(`/products/${productId}/images/${imageId}`, {
+    method: "PATCH",
+    body,
+  });
+
+  const data = (await response.json()) as ProductApiResponse;
+  return normalizeProduct(data);
+}
+
 export async function deleteProductImage(productId: string, imageId: string): Promise<void> {
   await apiFetch(`/products/${productId}/images/${imageId}`, {
     method: "DELETE",
@@ -106,6 +119,7 @@ export async function deleteProductImage(productId: string, imageId: string): Pr
 }
 
 export async function linkProductVariations(productId: string, variationIds: string[]): Promise<ProductResponse> {
+
   const response = await apiFetch(`/products/${productId}/variations`, {
     method: "POST",
     body: JSON.stringify({
