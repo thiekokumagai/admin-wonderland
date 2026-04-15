@@ -4,8 +4,6 @@ import type {
   CreateProductPayload,
   ProductItem,
   ProductResponse,
-  RemoveProductVariationOptionPayload,
-  RemoveProductVariationPayload,
   UpdateProductItemPayload,
 } from "@/types/product";
 
@@ -20,19 +18,6 @@ type ProductApiResponse = {
   variations?: Array<{
     id: string;
     variationId: string;
-    title?: string;
-    variation?: {
-      id: string;
-      title: string;
-      options?: Array<{
-        id: string;
-        value: string;
-      }>;
-    };
-    options?: Array<{
-      id: string;
-      value: string;
-    }>;
   }>;
   items?: unknown[];
 };
@@ -40,6 +25,10 @@ type ProductApiResponse = {
 type ProductItemApiResponse = {
   id: string;
   stock: number;
+  sku?: string | null;
+  price?: string | number | null;
+  promotionalPrice?: string | number | null;
+  costPrice?: string | number | null;
   options?: Array<{
     option: {
       id: string;
@@ -52,6 +41,15 @@ type ProductItemApiResponse = {
   }>;
 };
 
+function toNullableNumber(value: string | number | null | undefined) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
 function normalizeProduct(item: ProductApiResponse): ProductResponse {
   return {
     id: item.id,
@@ -61,16 +59,7 @@ function normalizeProduct(item: ProductApiResponse): ProductResponse {
       id: image.id,
       url: image.url,
     })),
-    variationIds: (item.variations ?? []).map((variation) => variation.variationId ?? variation.variation?.id ?? ""),
-    variations: (item.variations ?? []).map((variation) => ({
-      id: variation.id,
-      variationId: variation.variationId ?? variation.variation?.id ?? "",
-      title: variation.title ?? variation.variation?.title ?? "",
-      options: (variation.options ?? variation.variation?.options ?? []).map((option) => ({
-        id: option.id,
-        value: option.value,
-      })),
-    })),
+    variationIds: (item.variations ?? []).map((variation) => variation.variationId),
     itemsCount: item.items?.length ?? 0,
   };
 }
@@ -79,6 +68,10 @@ function normalizeProductItem(item: ProductItemApiResponse): ProductItem {
   return {
     id: item.id,
     stock: item.stock,
+    sku: item.sku ?? null,
+    price: toNullableNumber(item.price),
+    promotionalPrice: toNullableNumber(item.promotionalPrice),
+    costPrice: toNullableNumber(item.costPrice),
     options: (item.options ?? []).map((entry) => ({
       variationId: entry.option.variation?.id ?? "",
       variationTitle: entry.option.variation?.title,
@@ -110,12 +103,6 @@ export async function getProductById(id: string): Promise<ProductResponse> {
   return normalizeProduct(data);
 }
 
-export async function deleteProduct(id: string): Promise<void> {
-  await apiFetch(`/products/${id}`, {
-    method: "DELETE",
-  });
-}
-
 export async function uploadProductImages(productId: string, files: File[]): Promise<ProductResponse> {
   const body = new FormData();
   files.forEach((file) => body.append("files", file));
@@ -129,21 +116,14 @@ export async function uploadProductImages(productId: string, files: File[]): Pro
   return normalizeProduct(data);
 }
 
-export async function replaceProductImage(productId: string, imageId: string, file: File): Promise<ProductResponse> {
-  const body = new FormData();
-  body.append("file", file);
-
-  const response = await apiFetch(`/products/${productId}/images/${imageId}`, {
-    method: "PATCH",
-    body,
-  });
-
-  const data = (await response.json()) as ProductApiResponse;
-  return normalizeProduct(data);
-}
-
 export async function deleteProductImage(productId: string, imageId: string): Promise<void> {
   await apiFetch(`/products/${productId}/images/${imageId}`, {
+    method: "DELETE",
+  });
+}
+
+export async function deleteProduct(productId: string): Promise<void> {
+  await apiFetch(`/products/${productId}`, {
     method: "DELETE",
   });
 }
@@ -154,29 +134,6 @@ export async function linkProductVariations(productId: string, variationIds: str
     body: JSON.stringify({
       variationIds,
     }),
-  });
-
-  const data = (await response.json()) as ProductApiResponse;
-  return normalizeProduct(data);
-}
-
-export async function removeProductVariation(productId: string, payload: RemoveProductVariationPayload): Promise<ProductResponse> {
-  const response = await apiFetch(`/products/${productId}/variations`, {
-    method: "DELETE",
-    body: JSON.stringify(payload),
-  });
-
-  const data = (await response.json()) as ProductApiResponse;
-  return normalizeProduct(data);
-}
-
-export async function removeProductVariationOption(
-  productId: string,
-  payload: RemoveProductVariationOptionPayload,
-): Promise<ProductResponse> {
-  const response = await apiFetch(`/products/${productId}/variations/options`, {
-    method: "DELETE",
-    body: JSON.stringify(payload),
   });
 
   const data = (await response.json()) as ProductApiResponse;
@@ -209,8 +166,4 @@ export async function updateProductItem(itemId: string, payload: UpdateProductIt
 
   const data = (await response.json()) as ProductItemApiResponse;
   return normalizeProductItem(data);
-}
-
-export async function updateProductItemsBatch(items: { itemId: string; stock: number }[]) {
-  return Promise.all(items.map((item) => updateProductItem(item.itemId, { stock: item.stock })));
 }

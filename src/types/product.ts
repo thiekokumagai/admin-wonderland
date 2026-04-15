@@ -8,25 +8,12 @@ export type ProductVariationLink = {
   variationId: string;
 };
 
-export type SavedProductVariationOption = {
-  id: string;
-  value: string;
-};
-
-export type SavedProductVariation = {
-  id: string;
-  variationId: string;
-  title: string;
-  options: SavedProductVariationOption[];
-};
-
 export type ProductResponse = {
   id: string;
   title: string;
   categoryId: string;
   images: ProductImage[];
   variationIds: string[];
-  variations: SavedProductVariation[];
   itemsCount: number;
 };
 
@@ -44,6 +31,10 @@ export type ProductItemOption = {
 export type ProductItem = {
   id: string;
   stock: number;
+  sku?: string | null;
+  price?: number | null;
+  promotionalPrice?: number | null;
+  costPrice?: number | null;
   options: ProductItemOption[];
 };
 
@@ -54,18 +45,13 @@ export type CreateProductPayload = {
 
 export type CreateProductItemPayload = {
   stock: number;
-  options: string[];
+  options?: string[];
+  sku?: string;
+  price?: number;
+  promotionalPrice?: number;
+  costPrice?: number;
 };
 
 export type UpdateProductItemPayload = {
   stock: number;
-};
-
-export type RemoveProductVariationPayload = {
-  variationId: string;
-};
-
-export type RemoveProductVariationOptionPayload = {
-  variationId: string;
-  optionId: string;
 };
