@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowLeft, Package2, Plus, Save, Trash2 } from "lucide-react";
+import { ArrowLeft, Package2, Save, Shapes } from "lucide-react";
 import { useCategories } from "@/hooks/useCategories";
 import { useProductItems } from "@/hooks/useProductItems";
 import { useProducts } from "@/hooks/useProducts";
@@ -12,21 +12,25 @@ import { useVariations } from "@/hooks/useVariations";
 import {
   createProduct,
   createProductItems,
-  deleteProduct,
   deleteProductImage,
   getProductById,
-  updateProductItem,
+  getProductItems,
+  linkProductVariations,
+  removeProductVariation,
+  removeProductVariationOption,
+  replaceProductImage,
+  updateProductItemsBatch,
   uploadProductImages,
 } from "@/services/product.service";
 import { ProductDetailsForm, type ProductDetailsFormValues } from "@/components/products/ProductDetailsForm";
+import { ProductVariationSelector } from "@/components/products/ProductVariationSelector";
 import { ProductImageManager } from "@/components/products/ProductImageManager";
+import { ProductStockEditor, type QuickEditMode } from "@/components/products/ProductStockEditor";
+import { PageLoader } from "@/components/common/PageLoader";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/components/ui/use-toast";
-import type { CreateProductItemPayload, ProductImage, ProductItem } from "@/types/product";
+import type { ProductImage, ProductItem, ProductResponse } from "@/types/product";
 import type { Variation } from "@/types/variation";
 
 const productSchema = z.object({
@@ -41,49 +45,69 @@ type PendingImage = {
   file: File;
 };
 
-type DraftItem = {
-  id: string;
-  optionIds: string[];
-  labels: string[];
-  stock: number;
-  sku: string;
-  price: string;
-  promotionalPrice: string;
-  costPrice: string;
-};
-
-type QuickEditMode = "add" | "subtract" | "replace";
-
-type SimpleItemForm = {
-  stock: string;
-  sku: string;
-  price: string;
-  promotionalPrice: string;
-  costPrice: string;
-};
-
-const emptySimpleItemForm: SimpleItemForm = {
-  stock: "",
-  sku: "",
-  price: "",
-  promotionalPrice: "",
-  costPrice: "",
-};
-
 function buildOptionHash(optionIds: string[]) {
   return [...optionIds].sort().join("|");
 }
 
-function getNextStock(currentStock: number, value: number, mode: QuickEditMode) {
-  if (mode === "add") return currentStock + value;
-  if (mode === "subtract") return Math.max(0, currentStock - value);
-  return value;
+function getOrderedOptionIds(optionIds: string[], selectedVariationIds: string[], variations: Variation[]) {
+  return selectedVariationIds
+    .map((variationId) => {
+      const variation = variations.find((item) => item.id === variationId);
+      const option = variation?.options.find((item) => optionIds.includes(item.id));
+      return option?.id ?? null;
+    })
+    .filter((value): value is string => !!value);
 }
 
-function toOptionalNumber(value: string) {
-  if (!value.trim()) return undefined;
-  const parsed = Number(value.replace(",", "."));
-  return Number.isNaN(parsed) ? undefined : parsed;
+function getOptionCombinations(variationsWithSelections: Array<{ variation: Variation; optionIds: string[] }>) {
+  return variationsWithSelections.reduce<Array<{ optionIds: string[]; labels: string[] }>>(
+    (accumulator, entry) => {
+      const options = entry.variation.options.filter((option) => entry.optionIds.includes(option.id));
+
+      if (accumulator.length === 0) {
+        return options.map((option) => ({
+          optionIds: [option.id],
+          labels: [option.value],
+        }));
+      }
+
+      return accumulator.flatMap((combination) =>
+        options.map((option) => ({
+          optionIds: [...combination.optionIds, option.id],
+          labels: [...combination.labels, option.value],
+        })),
+      );
+    },
+    [],
+  );
+}
+
+function hasItemWithVariation(item: ProductItem, variationId: string) {
+  return item.options.some((option) => option.variationId === variationId);
+}
+
+function hasItemWithOption(item: ProductItem, optionId: string) {
+  return item.options.some((option) => option.optionId === optionId);
+}
+
+function getSelectedOptionsMap(product: ProductResponse) {
+  return product.variations.reduce<Record<string, string[]>>((acc, variation) => {
+    acc[variation.variationId] = variation.options.map((option) => option.id);
+    return acc;
+  }, {});
+}
+
+function sortProductItemsByVariationOrder(items: ProductItem[], selectedVariationIds: string[]) {
+  return [...items].sort((a, b) => {
+    const labelA = selectedVariationIds
+      .map((variationId) => a.options.find((option) => option.variationId === variationId)?.optionValue ?? "")
+      .join(" / ");
+    const labelB = selectedVariationIds
+      .map((variationId) => b.options.find((option) => option.variationId === variationId)?.optionValue ?? "")
+      .join(" / ");
+
+    return labelA.localeCompare(labelB, "pt-BR", { numeric: true, sensitivity: "base" });
+  });
 }
 
 export default function ProductDetailsPage() {
@@ -101,29 +125,46 @@ export default function ProductDetailsPage() {
   const [productId, setProductId] = useState<string | null>(isNewProduct ? null : id ?? null);
   const [images, setImages] = useState<ProductImage[]>([]);
   const [selectedVariationIds, setSelectedVariationIds] = useState<string[]>([]);
-  const [selectedOptionsByVariation, setSelectedOptionsByVariation] = useState<Record<string, string>>({});
+  const [selectedOptionsByVariation, setSelectedOptionsByVariation] = useState<Record<string, string[]>>({});
   const [pendingImages, setPendingImages] = useState<PendingImage[]>([]);
-  const [draftItems, setDraftItems] = useState<DraftItem[]>([]);
-  const [stockDraftByHash, setStockDraftByHash] = useState<Record<string, string>>({});
-  const [quickEditItemId, setQuickEditItemId] = useState<string | null>(null);
-  const [quickEditMode, setQuickEditMode] = useState<QuickEditMode>("add");
-  const [quickEditValue, setQuickEditValue] = useState("");
-  const [simpleItemForm, setSimpleItemForm] = useState<SimpleItemForm>(emptySimpleItemForm);
+  const [bulkMode, setBulkMode] = useState<QuickEditMode>("add");
+  const [bulkValues, setBulkValues] = useState<Record<string, string>>({});
 
   const productForm = useForm<ProductDetailsFormValues>({
     resolver: zodResolver(productSchema),
-    defaultValues: { title: "", categoryId: "" },
+    defaultValues: {
+      title: "",
+      categoryId: "",
+    },
   });
 
   const { data: savedItems = [], isLoading: loadingSavedItems, refetch: refetchItems } = useProductItems(productId ?? "");
 
-  const selectedVariations = useMemo<Variation[]>(
-    () => variations.filter((variation) => selectedVariationIds.includes(variation.id)),
+  useEffect(() => {
+  if (!savedItems?.length) return;
+
+      setBulkValues(
+        savedItems.reduce<Record<string, string>>((acc, item) => {
+          acc[item.id] = "";
+          return acc;
+        }, {}),
+      );
+    }, [savedItems]);
+
+  const selectedVariations = useMemo(
+    () =>
+      selectedVariationIds
+        .map((variationId) => variations.find((variation) => variation.id === variationId))
+        .filter((variation): variation is Variation => !!variation),
     [selectedVariationIds, variations],
   );
 
+  const orderedSavedItems = useMemo(
+    () => sortProductItemsByVariationOrder(savedItems, selectedVariationIds),
+    [savedItems, selectedVariationIds],
+  );
+
   const currentProduct = (productsQuery.data ?? []).find((product) => product.id === productId);
-  const isSimpleProduct = selectedVariationIds.length === 0;
 
   const createProductMutation = useMutation({
     mutationFn: createProduct,
@@ -131,18 +172,13 @@ export default function ProductDetailsPage() {
       queryClient.invalidateQueries({ queryKey: ["products"] });
       setProductId(product.id);
       setImages(product.images);
-      setSelectedVariationIds(product.variationIds);
+      setSelectedVariationIds(product.variationIds ?? []);
+      setSelectedOptionsByVariation(getSelectedOptionsMap(product));
       navigate(`/produtos/${product.id}`, { replace: true });
       toast({ title: "Produto criado" });
     },
-  });
-
-  const deleteProductMutation = useMutation({
-    mutationFn: (currentProductId: string) => deleteProduct(currentProductId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["products"] });
-      navigate("/produtos", { replace: true });
-      toast({ title: "Produto removido" });
+    onError: () => {
+      toast({ variant: "destructive", title: "Não foi possível criar o produto" });
     },
   });
 
@@ -151,49 +187,190 @@ export default function ProductDetailsPage() {
     onSuccess: (product) => {
       setProductId(product.id);
       setImages(product.images);
-      setSelectedVariationIds(product.variationIds);
-      productForm.reset({ title: product.title, categoryId: product.categoryId });
+      setSelectedVariationIds(product.variationIds ?? []);
+      setSelectedOptionsByVariation(getSelectedOptionsMap(product));
+      productForm.reset({
+        title: product.title,
+        categoryId: product.categoryId,
+      });
+    },
+    onError: () => {
+      toast({ variant: "destructive", title: "Não foi possível carregar o produto" });
+    },
+  });
+
+  const isInitialPageLoading =
+    !isNewProduct &&
+    (loadProductMutation.isPending || categoriesQuery.loading || variationsQuery.isLoading);
+
+  const linkVariationsMutation = useMutation({
+    mutationFn: async ({ currentProductId, variationIds }: { currentProductId: string; variationIds: string[] }) => {
+      const currentProductData = await getProductById(currentProductId);
+      const alreadyLinkedVariationIds = currentProductData.variationIds ?? [];
+      const variationIdsToLink = variationIds.filter((variationId) => !alreadyLinkedVariationIds.includes(variationId));
+
+      let product = currentProductData;
+
+      if (variationIdsToLink.length > 0) {
+        product = await linkProductVariations(currentProductId, variationIdsToLink);
+      }
+
+      const variationsWithSelections = variationIds
+        .map((variationId) => {
+          const variation = variations.find((item) => item.id === variationId);
+          const optionIds = selectedOptionsByVariation[variationId] ?? [];
+          return variation && optionIds.length > 0 ? { variation, optionIds } : null;
+        })
+        .filter((entry): entry is { variation: Variation; optionIds: string[] } => !!entry);
+
+      if (variationsWithSelections.length === 0) {
+        return await getProductById(currentProductId);
+      }
+
+      const combinations = getOptionCombinations(variationsWithSelections).map((combination) => ({
+        optionIds: getOrderedOptionIds(combination.optionIds, variationIds, variations),
+      }));
+
+      const existingItems = await getProductItems(currentProductId);
+      const existingHashes = new Set(
+        existingItems.map((item) => buildOptionHash(item.options.map((option) => option.optionId))),
+      );
+
+      const uniqueItemsToCreate = combinations.filter(
+        (combination, index, array) =>
+          array.findIndex((entry) => buildOptionHash(entry.optionIds) === buildOptionHash(combination.optionIds)) === index,
+      );
+
+      const itemsToCreate = uniqueItemsToCreate
+        .filter((combination) => !existingHashes.has(buildOptionHash(combination.optionIds)))
+        .map((combination) => ({
+          options: combination.optionIds,
+          stock: 0,
+        }));
+
+      if (itemsToCreate.length > 0) {
+        await createProductItems(currentProductId, itemsToCreate);
+      }
+
+      return await getProductById(currentProductId);
+    },
+    onSuccess: async (product) => {
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+      setSelectedVariationIds(product.variationIds ?? []);
+      setSelectedOptionsByVariation(getSelectedOptionsMap(product));
+      await refetchItems();
+      toast({ title: "Combinações salvas" });
+    },
+    onError: (error: Error) => {
+      toast({ variant: "destructive", title: error.message || "Não foi possível vincular as variações" });
+    },
+  });
+
+  const removeVariationMutation = useMutation({
+    mutationFn: ({ currentProductId, variationId }: { currentProductId: string; variationId: string }) =>
+      removeProductVariation(currentProductId, { variationId }),
+    onSuccess: async (product, variables) => {
+      setSelectedVariationIds(product.variationIds ?? []);
+      setSelectedOptionsByVariation(getSelectedOptionsMap(product));
+
+      setBulkValues((prev) => {
+        const next = { ...prev };
+        savedItems.forEach((item) => {
+          if (hasItemWithVariation(item, variables.variationId)) {
+            delete next[item.id];
+          }
+        });
+        return next;
+      });
+
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+      await refetchItems();
+      toast({ title: "Variação e estoques relacionados removidos" });
+    },
+    onError: () => {
+      toast({ variant: "destructive", title: "Não foi possível remover a variação" });
+    },
+  });
+
+  const removeVariationOptionMutation = useMutation({
+    mutationFn: ({ currentProductId, variationId, optionId }: { currentProductId: string; variationId: string; optionId: string }) =>
+      removeProductVariationOption(currentProductId, { variationId, optionId }),
+    onSuccess: async (product, variables) => {
+      setSelectedVariationIds(product.variationIds ?? []);
+      setSelectedOptionsByVariation(getSelectedOptionsMap(product));
+
+      setBulkValues((prev) => {
+        const next = { ...prev };
+        savedItems.forEach((item) => {
+          if (hasItemWithOption(item, variables.optionId)) {
+            delete next[item.id];
+          }
+        });
+        return next;
+      });
+
+      await refetchItems();
+      toast({ title: "Opção e estoques relacionados removidos" });
+    },
+    onError: () => {
+      toast({ variant: "destructive", title: "Não foi possível remover a opção" });
     },
   });
 
   const uploadImagesMutation = useMutation({
-    mutationFn: ({ currentProductId, files }: { currentProductId: string; files: File[] }) => uploadProductImages(currentProductId, files),
+    mutationFn: ({ currentProductId, files }: { currentProductId: string; files: File[] }) =>
+      uploadProductImages(currentProductId, files),
     onSuccess: (product) => {
       setImages(product.images);
       setPendingImages([]);
       queryClient.invalidateQueries({ queryKey: ["products"] });
       toast({ title: "Imagens enviadas com sucesso" });
     },
+    onError: () => {
+      toast({ variant: "destructive", title: "Não foi possível enviar as imagens" });
+    },
   });
 
   const deleteImageMutation = useMutation({
-    mutationFn: ({ currentProductId, imageId }: { currentProductId: string; imageId: string }) => deleteProductImage(currentProductId, imageId),
+    mutationFn: ({ currentProductId, imageId }: { currentProductId: string; imageId: string }) =>
+      deleteProductImage(currentProductId, imageId),
     onSuccess: (_, variables) => {
       setImages((prev) => prev.filter((image) => image.id !== variables.imageId));
       queryClient.invalidateQueries({ queryKey: ["products"] });
       toast({ title: "Imagem removida" });
     },
-  });
-
-  const saveItemsMutation = useMutation({
-    mutationFn: ({ currentProductId, items }: { currentProductId: string; items: CreateProductItemPayload[] }) => createProductItems(currentProductId, items),
-    onSuccess: async () => {
-      setDraftItems([]);
-      setSelectedOptionsByVariation({});
-      setStockDraftByHash({});
-      await refetchItems();
-      queryClient.invalidateQueries({ queryKey: ["products"] });
-      toast({ title: "Itens do produto salvos" });
+    onError: () => {
+      toast({ variant: "destructive", title: "Não foi possível remover a imagem" });
     },
   });
 
-  const updateItemMutation = useMutation({
-    mutationFn: ({ itemId, stock }: { itemId: string; stock: number }) => updateProductItem(itemId, { stock }),
+  const replaceImageMutation = useMutation({
+    mutationFn: ({ currentProductId, imageId, file }: { currentProductId: string; imageId: string; file: File }) =>
+      replaceProductImage(currentProductId, imageId, file),
+    onSuccess: (product) => {
+      setImages(product.images);
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+      toast({ title: "Imagem atualizada" });
+    },
+    onError: () => {
+      toast({ variant: "destructive", title: "Não foi possível atualizar a imagem" });
+    },
+  });
+
+  const updateStockBatchMutation = useMutation({
+    mutationFn: (items: { itemId: string; stock: number }[]) => updateProductItemsBatch(items),
     onSuccess: async () => {
       await refetchItems();
-      setQuickEditItemId(null);
-      setQuickEditValue("");
-      toast({ title: "Estoque atualizado" });
+      setBulkValues(
+        savedItems.reduce<Record<string, string>>((acc, item) => {
+          acc[item.id] = "";
+          return acc;
+        }, {}),
+      );
+      toast({ title: "Estoque salvo" });
+    },
+    onError: () => {
+      toast({ variant: "destructive", title: "Não foi possível salvar o estoque" });
     },
   });
 
@@ -204,20 +381,21 @@ export default function ProductDetailsPage() {
   }, [id, isNewProduct]);
 
   useEffect(() => {
-    if (savedItems.length === 1 && savedItems[0].options.length === 0) {
-      setSimpleItemForm({
-        stock: String(savedItems[0].stock ?? ""),
-        sku: savedItems[0].sku ?? "",
-        price: savedItems[0].price?.toString() ?? "",
-        promotionalPrice: savedItems[0].promotionalPrice?.toString() ?? "",
-        costPrice: savedItems[0].costPrice?.toString() ?? "",
-      });
-    }
-  }, [savedItems]);
+    return () => {
+      pendingImages.forEach((image) => URL.revokeObjectURL(image.previewUrl));
+    };
+  }, [pendingImages]);
 
   useEffect(() => {
-    return () => pendingImages.forEach((image) => URL.revokeObjectURL(image.previewUrl));
-  }, [pendingImages]);
+    if (!productId || pendingImages.length === 0 || uploadImagesMutation.isPending || createProductMutation.isPending) {
+      return;
+    }
+
+    uploadImagesMutation.mutate({
+      currentProductId: productId,
+      files: pendingImages.map((image) => image.file),
+    });
+  }, [createProductMutation.isPending, pendingImages, productId, uploadImagesMutation]);
 
   const handlePendingImagesChange = (files: File[]) => {
     setPendingImages((previous) => {
@@ -234,14 +412,18 @@ export default function ProductDetailsPage() {
   const handleRemovePendingImage = (pendingId: string) => {
     setPendingImages((prev) => {
       const target = prev.find((image) => image.id === pendingId);
-      if (target) URL.revokeObjectURL(target.previewUrl);
+      if (target) {
+        URL.revokeObjectURL(target.previewUrl);
+      }
       return prev.filter((image) => image.id !== pendingId);
     });
   };
 
   const handleSaveProductSection = async () => {
-    const valid = await productForm.trigger();
-    if (!valid) return;
+    const isValid = await productForm.trigger();
+    if (!isValid) {
+      return;
+    }
 
     const formValues = productForm.getValues();
 
@@ -265,116 +447,140 @@ export default function ProductDetailsPage() {
         files: pendingImages.map((image) => image.file),
       });
     } else {
-      toast({ title: "Nada novo para salvar em imagens" });
+      toast({ title: "Produto salvo" });
     }
   };
 
-  const handleSelectVariationOption = (variationId: string, optionId: string) => {
-    setSelectedOptionsByVariation((prev) => ({ ...prev, [variationId]: optionId }));
-  };
+  const handleChangeVariation = (slot: number, variationId: string) => {
+    const nextVariationIds = [...selectedVariationIds];
+    const previousVariationId = nextVariationIds[slot];
+    nextVariationIds[slot] = variationId;
 
-  const selectedOptionIds = selectedVariations
-    .map((variation) => selectedOptionsByVariation[variation.id])
-    .filter((value): value is string => !!value);
+    const cleanedVariationIds = nextVariationIds.filter(Boolean);
+    setSelectedVariationIds(cleanedVariationIds);
 
-  const canCreateCombination = selectedVariations.length > 0 && selectedOptionIds.length === selectedVariations.length;
-  const currentCombinationHash = canCreateCombination ? buildOptionHash(selectedOptionIds) : "";
+    setSelectedOptionsByVariation((prev) => {
+      const next = { ...prev };
 
-  const handleAddDraftItem = () => {
-    if (!canCreateCombination) {
-      toast({ variant: "destructive", title: "Escolha uma opção para cada variação" });
-      return;
-    }
-
-    const hash = buildOptionHash(selectedOptionIds);
-    const stock = Number(stockDraftByHash[hash] ?? "0");
-    if (!Number.isInteger(stock) || stock < 0) {
-      toast({ variant: "destructive", title: "Informe um estoque válido" });
-      return;
-    }
-
-    const labels = selectedVariations.map((variation) => {
-      const option = variation.options.find((item) => item.id === selectedOptionsByVariation[variation.id]);
-      return option?.value ?? "";
-    });
-
-    if (draftItems.some((item) => buildOptionHash(item.optionIds) === hash)) {
-      toast({ variant: "destructive", title: "Essa combinação já foi adicionada" });
-      return;
-    }
-
-    setDraftItems((prev) => [
-      ...prev,
-      {
-        id: crypto.randomUUID(),
-        optionIds: selectedOptionIds,
-        labels,
-        stock,
-        sku: "",
-        price: "",
-        promotionalPrice: "",
-        costPrice: "",
-      },
-    ]);
-    setSelectedOptionsByVariation({});
-  };
-
-  const handleSaveAllItems = () => {
-    if (!productId) {
-      toast({ variant: "destructive", title: "Crie o produto antes de salvar os itens" });
-      return;
-    }
-
-    if (isSimpleProduct) {
-      const stock = Number(simpleItemForm.stock);
-      if (!Number.isInteger(stock) || stock < 0) {
-        toast({ variant: "destructive", title: "Informe um estoque válido para o produto simples" });
-        return;
+      if (previousVariationId && previousVariationId !== variationId) {
+        delete next[previousVariationId];
       }
 
-      saveItemsMutation.mutate({
-        currentProductId: productId,
-        items: [{
-          stock,
-          sku: simpleItemForm.sku || undefined,
-          price: toOptionalNumber(simpleItemForm.price),
-          promotionalPrice: toOptionalNumber(simpleItemForm.promotionalPrice),
-          costPrice: toOptionalNumber(simpleItemForm.costPrice),
-        }],
+      if (variationId && !next[variationId]) {
+        next[variationId] = [];
+      }
+
+      Object.keys(next).forEach((key) => {
+        if (!cleanedVariationIds.includes(key)) {
+          delete next[key];
+        }
       });
-      return;
-    }
 
-    if (draftItems.length === 0) {
-      toast({ variant: "destructive", title: "Adicione ao menos uma combinação" });
-      return;
-    }
-
-    saveItemsMutation.mutate({
-      currentProductId: productId,
-      items: draftItems.map((item) => ({
-        options: item.optionIds,
-        stock: item.stock,
-        sku: item.sku || undefined,
-        price: toOptionalNumber(item.price),
-        promotionalPrice: toOptionalNumber(item.promotionalPrice),
-        costPrice: toOptionalNumber(item.costPrice),
-      })),
+      return next;
     });
   };
 
-  const handleApplyQuickEdit = (item: ProductItem) => {
-    const value = Number(quickEditValue);
-    if (!Number.isInteger(value) || value < 0) {
-      toast({ variant: "destructive", title: "Informe uma quantidade válida" });
+  const handleAddVariationSlot = () => {
+    if (selectedVariationIds.length >= variations.length) {
       return;
     }
 
-    updateItemMutation.mutate({ itemId: item.id, stock: getNextStock(item.stock, value, quickEditMode) });
+    setSelectedVariationIds((prev) => [...prev, ""]);
   };
 
-  const renderSavedItemLabel = (item: ProductItem) =>
-    item.options.length > 0 ? item.options.map((option) => option.optionValue).join(" / ") : "Produto simples";
+  const handleRemoveVariationSlot = (slot: number) => {
+    const variationIdToRemove = selectedVariationIds[slot];
+    const nextVariationIds = selectedVariationIds.filter((_, index) => index !== slot);
+
+    setSelectedVariationIds(nextVariationIds);
+
+    if (variationIdToRemove) {
+      setSelectedOptionsByVariation((prev) => {
+        const next = { ...prev };
+        delete next[variationIdToRemove];
+        return next;
+      });
+    }
+  };
+
+  const handleToggleVariationOption = (variationId: string, optionId: string, checked: boolean) => {
+    setSelectedOptionsByVariation((prev) => {
+      const current = prev[variationId] ?? [];
+      const nextValues = checked ? [...new Set([...current, optionId])] : current.filter((itemId) => itemId !== optionId);
+      return {
+        ...prev,
+        [variationId]: nextValues,
+      };
+    });
+  };
+
+  const handleToggleAllVariationOptions = (variationId: string, checked: boolean) => {
+    const variation = variations.find((item) => item.id === variationId);
+    if (!variation) {
+      return;
+    }
+
+    setSelectedOptionsByVariation((prev) => ({
+      ...prev,
+      [variationId]: checked ? variation.options.map((option) => option.id) : [],
+    }));
+  };
+
+  const handleSaveVariationLinks = () => {
+    if (!productId) {
+      toast({ variant: "destructive", title: "Crie o produto antes de salvar as variações" });
+      return;
+    }
+
+    const validVariationIds = selectedVariationIds.filter(Boolean);
+
+    if (validVariationIds.length === 0) {
+      toast({ variant: "destructive", title: "Selecione pelo menos uma variação" });
+      return;
+    }
+
+    linkVariationsMutation.mutate({
+      currentProductId: productId,
+      variationIds: validVariationIds,
+    });
+  };
+
+  const handleSaveAllStocks = () => {
+    const payload = orderedSavedItems
+      .filter((item) => (bulkValues[item.id] ?? "") !== "")
+      .map((item) => {
+        const value = Number(bulkValues[item.id]);
+        const nextStock =
+          bulkMode === "add"
+            ? item.stock + value
+            : bulkMode === "subtract"
+              ? Math.max(0, item.stock - value)
+              : value;
+
+        return {
+          itemId: item.id,
+          stock: nextStock,
+        };
+      });
+
+    const hasInvalidValue = payload.some((item) => Number.isNaN(item.stock) || item.stock < 0);
+
+    if (hasInvalidValue) {
+      toast({ variant: "destructive", title: "Informe quantidades válidas" });
+      return;
+    }
+
+    if (payload.length === 0) {
+      toast({ title: "Nenhuma alteração para salvar" });
+      return;
+    }
+
+    updateStockBatchMutation.mutate(payload);
+  };
+
+  if (isInitialPageLoading) {
+    return <PageLoader message="Carregando produto..." />;
+  }
 
   return (
     <div className="space-y-6">
@@ -387,251 +593,125 @@ export default function ProductDetailsPage() {
             </Link>
           </Button>
           <h1 className="text-2xl font-bold">{isNewProduct ? "Novo produto" : currentProduct?.title ?? "Editar produto"}</h1>
-          <p className="text-sm text-muted-foreground">Agora com preços, SKU e suporte para produto simples ou com variações.</p>
+          <p className="text-sm text-muted-foreground">
+            Cadastro do produto com imagens, variações e controle de quantidade em estoque.
+          </p>
         </div>
 
         <div className="flex flex-wrap gap-2">
-          {!isNewProduct && productId ? (
-            <Button variant="destructive" onClick={() => deleteProductMutation.mutate(productId)} disabled={deleteProductMutation.isPending}>
-              Excluir produto
-            </Button>
-          ) : null}
-          <div className="rounded-2xl bg-muted px-4 py-2 text-sm text-muted-foreground">{images.length + pendingImages.length} foto(s)</div>
-          <div className="rounded-2xl bg-muted px-4 py-2 text-sm text-muted-foreground">{savedItems.length} SKU(s)</div>
+          <div className="rounded-2xl bg-muted px-4 py-2 text-sm text-muted-foreground">
+            {images.length} foto(s)
+          </div>
+          <div className="rounded-2xl bg-muted px-4 py-2 text-sm text-muted-foreground">
+            {savedItems.length} SKU(s)
+          </div>
         </div>
       </div>
 
       <Tabs defaultValue="produto" className="space-y-6">
         <TabsList className="h-auto rounded-2xl bg-muted/40 p-1">
           <TabsTrigger value="produto" className="rounded-xl px-5 py-2 data-[state=active]:bg-background">
-            <Package2 className="mr-2 h-4 w-4" />Produto
+            <Package2 className="mr-2 h-4 w-4" />
+            Produto
+          </TabsTrigger>
+          <TabsTrigger value="variacoes" className="rounded-xl px-5 py-2 data-[state=active]:bg-background">
+            <Shapes className="mr-2 h-4 w-4" />
+            Variações
           </TabsTrigger>
           <TabsTrigger value="estoque" className="rounded-xl px-5 py-2 data-[state=active]:bg-background">
-            <Save className="mr-2 h-4 w-4" />Estoque e valores
+            <Save className="mr-2 h-4 w-4" />
+            Estoque
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="produto" className="space-y-6">
-          <div className="grid gap-6 xl:grid-cols-[1.1fr_1fr]">
-            <ProductDetailsForm form={productForm} categories={categories} onSubmit={() => undefined} isSaving={createProductMutation.isPending || loadProductMutation.isPending} productId={productId} />
-
-            <div className="space-y-6">
-              <Card className="rounded-3xl border-0 bg-muted/20 shadow-none">
-                <CardHeader><CardTitle className="text-lg">Resumo rápido</CardTitle></CardHeader>
-                <CardContent className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
-                  <div className="rounded-2xl bg-card p-4">
-                    <p className="text-sm text-muted-foreground">Categoria</p>
-                    <p className="mt-1 font-medium">{categories.find((category) => category.id === productForm.watch("categoryId"))?.title ?? "Não selecionada"}</p>
-                  </div>
-                  <div className="rounded-2xl bg-card p-4">
-                    <p className="text-sm text-muted-foreground">Tipo</p>
-                    <p className="mt-1 font-medium">{isSimpleProduct ? "Produto simples" : "Com variações"}</p>
-                  </div>
-                  <div className="rounded-2xl bg-card p-4">
-                    <p className="text-sm text-muted-foreground">Imagens</p>
-                    <p className="mt-1 font-medium">{images.length + pendingImages.length} no total</p>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="rounded-3xl border-0 bg-muted/20 shadow-none">
-                <CardHeader><CardTitle className="text-lg">Salvar seção</CardTitle></CardHeader>
-                <CardContent>
-                  <Button type="button" className="w-full rounded-xl" onClick={() => void handleSaveProductSection()}>
-                    Salvar título, categoria e imagens
-                  </Button>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
+          <ProductDetailsForm
+            form={productForm}
+            categories={categories}
+            onSubmit={() => void handleSaveProductSection()}
+            isSaving={createProductMutation.isPending || loadProductMutation.isPending || uploadImagesMutation.isPending}
+            productId={productId}
+          />
 
           <ProductImageManager
             images={images}
             pendingImages={pendingImages}
             isUploading={uploadImagesMutation.isPending}
             isDeletingImage={deleteImageMutation.isPending}
+            isUpdatingImage={replaceImageMutation.isPending}
             onPendingImagesChange={handlePendingImagesChange}
             onRemovePendingImage={handleRemovePendingImage}
             onDeleteImage={(imageId) => {
-              if (!productId) return;
+              if (!productId) {
+                return;
+              }
               deleteImageMutation.mutate({ currentProductId: productId, imageId });
+            }}
+            onReplaceImage={async (imageId, file) => {
+              if (!productId) {
+                return;
+              }
+              await replaceImageMutation.mutateAsync({ currentProductId: productId, imageId, file });
             }}
           />
         </TabsContent>
 
+        <TabsContent value="variacoes" className="space-y-6">
+          <ProductVariationSelector
+            variations={variations}
+            selectedVariationIds={selectedVariationIds}
+            selectedOptionsByVariation={selectedOptionsByVariation}
+            onChangeVariation={handleChangeVariation}
+            onAddSlot={handleAddVariationSlot}
+            onRemoveSlot={handleRemoveVariationSlot}
+            onToggleOption={handleToggleVariationOption}
+            onToggleAllOptions={handleToggleAllVariationOptions}
+            onRemoveVariation={(variationId) => {
+              if (!productId) return;
+              removeVariationMutation.mutate({ currentProductId: productId, variationId });
+            }}
+            onRemoveVariationOption={(variationId, optionId) => {
+              if (!productId) return;
+              removeVariationOptionMutation.mutate({ currentProductId: productId, variationId, optionId });
+            }}
+            disabled={
+              !productId ||
+              linkVariationsMutation.isPending ||
+              removeVariationMutation.isPending ||
+              removeVariationOptionMutation.isPending
+            }
+          />
+
+          <div>
+            <Button
+              type="button"
+              onClick={handleSaveVariationLinks}
+              disabled={!productId || linkVariationsMutation.isPending}
+              className="rounded-xl"
+            >
+              {linkVariationsMutation.isPending ? "Salvando..." : "Salvar combinações"}
+            </Button>
+          </div>
+        </TabsContent>
+
         <TabsContent value="estoque" className="space-y-6">
-          <Card className="rounded-3xl border-0 bg-muted/20 shadow-none">
-            <CardHeader><CardTitle className="text-lg">Estoque, SKU e valores</CardTitle></CardHeader>
-            <CardContent className="space-y-6">
-              {!productId ? (
-                <div className="rounded-2xl border border-dashed p-6 text-sm text-muted-foreground">Crie o produto antes de cadastrar estoque e valores.</div>
-              ) : isSimpleProduct ? (
-                <div className="grid gap-6 xl:grid-cols-[1fr_420px]">
-                  <Card className="rounded-3xl bg-card shadow-none">
-                    <CardHeader><CardTitle className="text-base">Produto simples</CardTitle></CardHeader>
-                    <CardContent className="grid gap-4 md:grid-cols-2">
-                      <div className="space-y-2"><Label>Estoque</Label><Input type="number" min="0" value={simpleItemForm.stock} onChange={(e) => setSimpleItemForm((prev) => ({ ...prev, stock: e.target.value }))} placeholder="0" /></div>
-                      <div className="space-y-2"><Label>SKU</Label><Input value={simpleItemForm.sku} onChange={(e) => setSimpleItemForm((prev) => ({ ...prev, sku: e.target.value }))} placeholder="SKU do produto" /></div>
-                      <div className="space-y-2"><Label>Preço</Label><Input value={simpleItemForm.price} onChange={(e) => setSimpleItemForm((prev) => ({ ...prev, price: e.target.value }))} placeholder="0,00" /></div>
-                      <div className="space-y-2"><Label>Preço promocional</Label><Input value={simpleItemForm.promotionalPrice} onChange={(e) => setSimpleItemForm((prev) => ({ ...prev, promotionalPrice: e.target.value }))} placeholder="0,00" /></div>
-                      <div className="space-y-2 md:col-span-2"><Label>Custo</Label><Input value={simpleItemForm.costPrice} onChange={(e) => setSimpleItemForm((prev) => ({ ...prev, costPrice: e.target.value }))} placeholder="0,00" /></div>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="rounded-3xl border-0 bg-card shadow-none">
-                    <CardHeader><CardTitle className="text-base">Salvar item</CardTitle></CardHeader>
-                    <CardContent>
-                      <Button type="button" onClick={handleSaveAllItems} className="w-full rounded-xl" disabled={saveItemsMutation.isPending}>
-                        Salvar produto simples
-                      </Button>
-                    </CardContent>
-                  </Card>
-                </div>
-              ) : (
-                <>
-                  <div className="grid gap-4 xl:grid-cols-3">
-                    {selectedVariations.map((variation) => (
-                      <div key={variation.id} className="rounded-3xl bg-card p-4">
-                        <p className="mb-3 font-medium">{variation.title}</p>
-                        <div className="space-y-2">
-                          {variation.options.map((option) => {
-                            const active = selectedOptionsByVariation[variation.id] === option.id;
-                            return (
-                              <button key={option.id} type="button" onClick={() => handleSelectVariationOption(variation.id, option.id)} className={`w-full rounded-2xl border px-3 py-2 text-left text-sm transition-colors ${active ? "border-primary bg-primary/10 text-primary" : "hover:bg-muted"}`}>
-                                {option.value}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="grid gap-4 rounded-3xl bg-card p-4 xl:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label>Quantidade</Label>
-                      <Input
-                        type="number"
-                        min="0"
-                        value={currentCombinationHash ? stockDraftByHash[currentCombinationHash] ?? "" : ""}
-                        onChange={(event) => {
-                          if (!currentCombinationHash) return;
-                          setStockDraftByHash((prev) => ({ ...prev, [currentCombinationHash]: event.target.value }));
-                        }}
-                        placeholder="0"
-                        disabled={!canCreateCombination}
-                      />
-                    </div>
-
-                    <div className="flex items-end justify-end">
-                      <Button type="button" onClick={handleAddDraftItem} disabled={!canCreateCombination} className="rounded-xl">
-                        <Plus className="mr-2 h-4 w-4" />Adicionar combinação
-                      </Button>
-                    </div>
-                  </div>
-
-                  <div className="grid gap-6 xl:grid-cols-2">
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <h3 className="font-semibold">Combinações prontas</h3>
-                        <span className="text-sm text-muted-foreground">{draftItems.length} item(ns)</span>
-                      </div>
-
-                      {draftItems.length === 0 ? (
-                        <div className="rounded-2xl border border-dashed p-5 text-sm text-muted-foreground">Nenhuma combinação adicionada ainda.</div>
-                      ) : (
-                        draftItems.map((item) => (
-                          <div key={item.id} className="rounded-2xl bg-card p-4 space-y-4">
-                            <div className="flex items-start justify-between gap-4">
-                              <div>
-                                <p className="font-medium">{item.labels.join(" / ")}</p>
-                                <p className="text-sm text-muted-foreground">Qtde: {item.stock}</p>
-                              </div>
-                              <Button type="button" variant="ghost" size="icon" onClick={() => setDraftItems((prev) => prev.filter((draft) => draft.id !== item.id))}>
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              </Button>
-                            </div>
-
-                            <div className="grid gap-3 md:grid-cols-2">
-                              <div className="space-y-2"><Label>SKU</Label><Input value={item.sku} onChange={(e) => setDraftItems((prev) => prev.map((draft) => draft.id === item.id ? { ...draft, sku: e.target.value } : draft))} placeholder="SKU" /></div>
-                              <div className="space-y-2"><Label>Preço</Label><Input value={item.price} onChange={(e) => setDraftItems((prev) => prev.map((draft) => draft.id === item.id ? { ...draft, price: e.target.value } : draft))} placeholder="0,00" /></div>
-                              <div className="space-y-2"><Label>Preço promocional</Label><Input value={item.promotionalPrice} onChange={(e) => setDraftItems((prev) => prev.map((draft) => draft.id === item.id ? { ...draft, promotionalPrice: e.target.value } : draft))} placeholder="0,00" /></div>
-                              <div className="space-y-2"><Label>Custo</Label><Input value={item.costPrice} onChange={(e) => setDraftItems((prev) => prev.map((draft) => draft.id === item.id ? { ...draft, costPrice: e.target.value } : draft))} placeholder="0,00" /></div>
-                            </div>
-                          </div>
-                        ))
-                      )}
-
-                      <div className="flex justify-end">
-                        <Button type="button" onClick={handleSaveAllItems} disabled={draftItems.length === 0 || saveItemsMutation.isPending} className="rounded-xl">
-                          Salvar combinações
-                        </Button>
-                      </div>
-                    </div>
-
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <h3 className="font-semibold">Itens salvos</h3>
-                        <span className="text-sm text-muted-foreground">{savedItems.length} item(ns)</span>
-                      </div>
-
-                      {loadingSavedItems ? (
-                        <div className="rounded-2xl border border-dashed p-5 text-sm text-muted-foreground">Carregando itens...</div>
-                      ) : savedItems.length === 0 ? (
-                        <div className="rounded-2xl border border-dashed p-5 text-sm text-muted-foreground">Nenhum item salvo ainda.</div>
-                      ) : (
-                        savedItems.map((item) => {
-                          const isEditing = quickEditItemId === item.id;
-                          const previewStock = quickEditValue === "" ? item.stock : getNextStock(item.stock, Number(quickEditValue || 0), quickEditMode);
-
-                          return (
-                            <div key={item.id} className="rounded-2xl bg-card p-4 space-y-3">
-                              <div className="flex items-center justify-between gap-4">
-                                <div>
-                                  <p className="font-medium">{renderSavedItemLabel(item)}</p>
-                                  <p className="text-sm text-muted-foreground">Estoque atual: {item.stock}</p>
-                                  <p className="text-xs text-muted-foreground">SKU: {item.sku || "-"} • Preço: {item.price ?? "-"} • Promo: {item.promotionalPrice ?? "-"}</p>
-                                </div>
-
-                                {!isEditing ? (
-                                  <Button type="button" variant="outline" size="sm" className="rounded-full" onClick={() => {
-                                    setQuickEditItemId(item.id);
-                                    setQuickEditMode("add");
-                                    setQuickEditValue("");
-                                  }}>
-                                    <Plus className="mr-1 h-4 w-4" />Mais ou menos
-                                  </Button>
-                                ) : null}
-                              </div>
-
-                              {isEditing ? (
-                                <div className="space-y-3 rounded-2xl border border-dashed p-4">
-                                  <div className="flex flex-wrap gap-2">
-                                    <Button type="button" size="sm" variant={quickEditMode === "add" ? "default" : "outline"} onClick={() => setQuickEditMode("add")}>Somar</Button>
-                                    <Button type="button" size="sm" variant={quickEditMode === "subtract" ? "default" : "outline"} onClick={() => setQuickEditMode("subtract")}>Subtrair</Button>
-                                    <Button type="button" size="sm" variant={quickEditMode === "replace" ? "default" : "outline"} onClick={() => setQuickEditMode("replace")}>Substituir</Button>
-                                  </div>
-
-                                  <div className="grid gap-3 md:grid-cols-[180px_1fr_auto] md:items-end">
-                                    <div className="space-y-2"><Label>Quantidade</Label><Input type="number" min="0" value={quickEditValue} onChange={(e) => setQuickEditValue(e.target.value)} placeholder="0" /></div>
-                                    <div className="rounded-2xl bg-muted px-4 py-3 text-sm text-muted-foreground">Resultado previsto: <span className="font-medium text-foreground">{Number.isNaN(previewStock) ? item.stock : previewStock}</span></div>
-                                    <div className="flex gap-2">
-                                      <Button type="button" variant="outline" onClick={() => { setQuickEditItemId(null); setQuickEditValue(""); }}>Cancelar</Button>
-                                      <Button type="button" onClick={() => handleApplyQuickEdit(item)} disabled={updateItemMutation.isPending}>Salvar</Button>
-                                    </div>
-                                  </div>
-                                </div>
-                              ) : null}
-                            </div>
-                          );
-                        })
-                      )}
-                    </div>
-                  </div>
-                </>
-              )}
-            </CardContent>
-          </Card>
+          <ProductStockEditor
+            productReady={!!productId}
+            hasVariations={selectedVariations.length > 0}
+            loadingSavedItems={loadingSavedItems}
+            savedItems={orderedSavedItems}
+            bulkMode={bulkMode}
+            bulkValues={bulkValues}
+            isSaving={updateStockBatchMutation.isPending}
+            onModeChange={setBulkMode}
+            onValueChange={(itemId, value) => {
+              setBulkValues((prev) => ({
+                ...prev,
+                [itemId]: value,
+              }));
+            }}
+            onSaveAll={handleSaveAllStocks}
+          />
         </TabsContent>
       </Tabs>
     </div>
