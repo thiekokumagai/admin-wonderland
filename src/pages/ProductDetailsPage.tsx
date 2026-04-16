@@ -36,6 +36,9 @@ import type { Variation } from "@/types/variation";
 const productSchema = z.object({
   title: z.string().min(1, "Informe o nome do produto."),
   categoryId: z.string().min(1, "Selecione uma categoria."),
+  price: z.number().min(0, "O preço deve ser maior ou igual a zero.").optional(),
+  promotionalPrice: z.number().min(0, "O preço promocional deve ser maior ou igual a zero.").optional(),
+  costPrice: z.number().min(0, "O preço de custo deve ser maior ou igual a zero.").optional(),
 });
 
 type PendingImage = {
@@ -135,6 +138,9 @@ export default function ProductDetailsPage() {
     defaultValues: {
       title: "",
       categoryId: "",
+      price: undefined,
+      promotionalPrice: undefined,
+      costPrice: undefined,
     },
   });
 
@@ -192,6 +198,9 @@ export default function ProductDetailsPage() {
       productForm.reset({
         title: product.title,
         categoryId: product.categoryId,
+        price: product.price,
+        promotionalPrice: product.promotionalPrice,
+        costPrice: product.costPrice,
       });
     },
     onError: () => {

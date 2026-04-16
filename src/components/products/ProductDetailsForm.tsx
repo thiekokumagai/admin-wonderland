@@ -5,11 +5,15 @@ import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { NumericFormat } from "react-number-format";
 import type { CategoryList } from "@/types/category";
 
 export type ProductDetailsFormValues = {
   title: string;
   categoryId: string;
+  price?: number;
+  promotionalPrice?: number;
+  costPrice?: number;
 };
 
 type ProductDetailsFormProps = {
@@ -70,6 +74,98 @@ export function ProductDetailsForm({
                     <FormLabel>Título</FormLabel>
                     <FormControl>
                       <Input className="h-12 rounded-2xl" placeholder="Nome do produto" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <div className="grid gap-5 md:grid-cols-3">
+              <FormField
+                control={form.control}
+                name="price"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Preço (Venda)</FormLabel>
+                    <FormControl>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">R$</span>
+                        <NumericFormat
+                          customInput={Input}
+                          decimalSeparator=","
+                          thousandSeparator="."
+                          decimalScale={2}
+                          fixedDecimalScale
+                          allowNegative={false}
+                          className="h-12 rounded-2xl pl-9"
+                          placeholder="0,00"
+                          value={field.value}
+                          onValueChange={(values) => {
+                            field.onChange(values.floatValue);
+                          }}
+                        />
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="promotionalPrice"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Preço Promocional</FormLabel>
+                    <FormControl>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">R$</span>
+                        <NumericFormat
+                          customInput={Input}
+                          decimalSeparator=","
+                          thousandSeparator="."
+                          decimalScale={2}
+                          fixedDecimalScale
+                          allowNegative={false}
+                          className="h-12 rounded-2xl pl-9"
+                          placeholder="0,00"
+                          value={field.value}
+                          onValueChange={(values) => {
+                            field.onChange(values.floatValue);
+                          }}
+                        />
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="costPrice"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Preço de Custo</FormLabel>
+                    <FormControl>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">R$</span>
+                        <NumericFormat
+                          customInput={Input}
+                          decimalSeparator=","
+                          thousandSeparator="."
+                          decimalScale={2}
+                          fixedDecimalScale
+                          allowNegative={false}
+                          className="h-12 rounded-2xl pl-9"
+                          placeholder="0,00"
+                          value={field.value}
+                          onValueChange={(values) => {
+                            field.onChange(values.floatValue);
+                          }}
+                        />
+                      </div>
                     </FormControl>
                     <FormMessage />
                   </FormItem>

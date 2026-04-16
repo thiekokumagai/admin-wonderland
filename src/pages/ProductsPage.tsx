@@ -35,6 +35,9 @@ export default function ProductsPage() {
       const newProduct = await createProduct({
         title: `${fullProduct.title} (Cópia)`,
         categoryId: fullProduct.categoryId,
+        price: fullProduct.price,
+        promotionalPrice: fullProduct.promotionalPrice,
+        costPrice: fullProduct.costPrice,
       });
 
       if (fullProduct.variationIds.length > 0) {

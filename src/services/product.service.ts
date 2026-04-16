@@ -35,6 +35,9 @@ type ProductApiResponse = {
     }>;
   }>;
   items?: unknown[];
+  price?: string | null;
+  promotionalPrice?: string | null;
+  costPrice?: string | null;
 };
 
 type ProductItemApiResponse = {
@@ -72,6 +75,9 @@ function normalizeProduct(item: ProductApiResponse): ProductResponse {
       })),
     })),
     itemsCount: item.items?.length ?? 0,
+    price: item.price ? Number(item.price) : undefined,
+    promotionalPrice: item.promotionalPrice ? Number(item.promotionalPrice) : undefined,
+    costPrice: item.costPrice ? Number(item.costPrice) : undefined,
   };
 }
 
