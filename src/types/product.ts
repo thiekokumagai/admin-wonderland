@@ -31,6 +31,8 @@ export type ProductResponse = {
   price?: number;
   promotionalPrice?: number;
   costPrice?: number;
+  description?: string;
+  descriptionFormated?: string;
 };
 
 export type ProductVariationLinkPayload = {

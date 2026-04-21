@@ -40,6 +40,8 @@ const ProductStockEditor = lazy(() => import("@/components/products/ProductStock
 const productSchema = z.object({
   title: z.string().min(1, "Informe o nome do produto."),
   categoryId: z.string().min(1, "Selecione uma categoria."),
+  description: z.string().optional(),
+  descriptionFormated: z.string().optional(),
   price: z.number().min(0, "O preço deve ser maior ou igual a zero.").optional(),
   promotionalPrice: z.number().min(0, "O preço promocional deve ser maior ou igual a zero.").optional(),
   costPrice: z.number().min(0, "O preço de custo deve ser maior ou igual a zero.").optional(),
@@ -142,6 +144,8 @@ export default function ProductDetailsPage() {
     defaultValues: {
       title: "",
       categoryId: "",
+      description: "",
+      descriptionFormated: "",
       price: undefined,
       promotionalPrice: undefined,
       costPrice: undefined,
@@ -209,6 +213,8 @@ export default function ProductDetailsPage() {
       setSelectedOptionsByVariation(getSelectedOptionsMap(product));
       productForm.reset({
         title: product.title,
+        description: product.description ?? "",
+        descriptionFormated: product.descriptionFormated ?? "",
         categoryId: product.categoryId,
         price: product.price,
         promotionalPrice: product.promotionalPrice,
@@ -440,7 +446,11 @@ export default function ProductDetailsPage() {
       return;
     }
 
-    const formValues = productForm.getValues();
+    const rawValues = productForm.getValues();
+    const formValues = {
+      ...rawValues,
+      descriptionFormated: rawValues.description?.replace(/<[^>]*>/g, '').trim() ?? "",
+    };
 
     if (!productId) {
       // Fluxo de Cadastro: Unificado (Produto -> Imagens)
