@@ -1,7 +1,5 @@
-import { Save } from "lucide-react";
 import { UseFormReturn } from "react-hook-form";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -20,16 +18,12 @@ type ProductDetailsFormProps = {
   form: UseFormReturn<ProductDetailsFormValues>;
   categories: CategoryList[];
   onSubmit: (values: ProductDetailsFormValues) => void;
-  isSaving: boolean;
-  productId: string | null;
 };
 
 export function ProductDetailsForm({
   form,
   categories,
   onSubmit,
-  isSaving,
-  productId,
 }: ProductDetailsFormProps) {
   return (
     <Card className="rounded-3xl">
@@ -175,17 +169,6 @@ export function ProductDetailsForm({
           </form>
         </Form>
       </CardContent>
-      <div className="flex justify-end px-6 pb-6">
-        <Button
-          type="button"
-          className="rounded-xl px-6"
-          disabled={isSaving}
-          onClick={form.handleSubmit(onSubmit)}
-        >
-          <Save className="mr-2 h-4 w-4" />
-          {productId ? "Salvar produto" : "Criar produto"}
-        </Button>
-      </div>
     </Card>
   );
 }

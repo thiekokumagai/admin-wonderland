@@ -648,13 +648,6 @@ export default function ProductDetailsPage() {
             form={productForm}
             categories={categories}
             onSubmit={() => void handleSaveProductSection()}
-            isSaving={
-              createProductMutation.isPending ||
-              updateProductMutation.isPending ||
-              productQuery.isFetching ||
-              uploadImagesMutation.isPending
-            }
-            productId={productId}
           />
 
           <Suspense fallback={<PageLoader message="Carregando gestor de imagens..." />}>
@@ -680,6 +673,23 @@ export default function ProductDetailsPage() {
               }}
             />
           </Suspense>
+
+          <div className="flex justify-end">
+            <Button
+              type="button"
+              className="rounded-xl px-6"
+              disabled={
+                createProductMutation.isPending ||
+                updateProductMutation.isPending ||
+                productQuery.isFetching ||
+                uploadImagesMutation.isPending
+              }
+              onClick={() => void handleSaveProductSection()}
+            >
+              <Save className="mr-2 h-4 w-4" />
+              {productId ? "Salvar produto" : "Criar produto"}
+            </Button>
+          </div>
         </TabsContent>
 
         <TabsContent value="variacoes" className="space-y-6">
