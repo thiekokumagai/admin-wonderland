@@ -220,3 +220,15 @@ export async function updateProductItem(itemId: string, payload: UpdateProductIt
 export async function updateProductItemsBatch(items: { itemId: string; stock: number }[]) {
   return Promise.all(items.map((item) => updateProductItem(item.itemId, { stock: item.stock })));
 }
+export async function updateProduct(
+  id: string,
+  payload: Partial<CreateProductPayload>
+): Promise<ProductResponse> {
+  const response = await apiFetch(`/products/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+
+  const data = (await response.json()) as ProductApiResponse;
+  return normalizeProduct(data);
+}
