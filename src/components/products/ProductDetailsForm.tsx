@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
+import { RichTextEditor } from "@/components/ui/richtexteditor";
 import { NumericFormat } from "react-number-format";
 import type { CategoryList } from "@/types/category";
 
@@ -85,10 +85,9 @@ export function ProductDetailsForm({
                 <FormItem>
                   <FormLabel>Descrição (Suporta HTML)</FormLabel>
                   <FormControl>
-                    <Textarea
-                      className="min-h-[120px] rounded-2xl"
-                      placeholder="Descreva o produto..."
-                      {...field}
+                    <RichTextEditor
+                      value={field.value}
+                      onChange={field.onChange}
                     />
                   </FormControl>
                   <FormMessage />
