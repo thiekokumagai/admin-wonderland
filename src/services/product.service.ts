@@ -13,6 +13,8 @@ type ProductApiResponse = {
   id: string;
   title: string;
   categoryId: string;
+  description?: string | null;
+  descriptionFormated?: string | null;
   images?: Array<{
     id: string;
     url: string;
@@ -60,6 +62,8 @@ function normalizeProduct(item: ProductApiResponse): ProductResponse {
     id: item.id,
     title: item.title,
     categoryId: item.categoryId,
+    description: item.description ?? "",
+    descriptionFormated: item.descriptionFormated ?? "",
     images: (item.images ?? []).map((image) => ({
       id: image.id,
       url: image.url,
