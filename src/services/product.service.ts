@@ -13,6 +13,8 @@ type ProductApiResponse = {
   id: string;
   title: string;
   categoryId: string;
+  description?: string | null;
+  descriptionFormated?: string | null;
   images?: Array<{
     id: string;
     url: string;
@@ -35,6 +37,9 @@ type ProductApiResponse = {
     }>;
   }>;
   items?: unknown[];
+  price?: string | null;
+  promotionalPrice?: string | null;
+  costPrice?: string | null;
 };
 
 type ProductItemApiResponse = {
@@ -57,6 +62,8 @@ function normalizeProduct(item: ProductApiResponse): ProductResponse {
     id: item.id,
     title: item.title,
     categoryId: item.categoryId,
+    description: item.description ?? "",
+    descriptionFormated: item.descriptionFormated ?? "",
     images: (item.images ?? []).map((image) => ({
       id: image.id,
       url: image.url,
@@ -72,6 +79,9 @@ function normalizeProduct(item: ProductApiResponse): ProductResponse {
       })),
     })),
     itemsCount: item.items?.length ?? 0,
+    price: item.price ? Number(item.price) : undefined,
+    promotionalPrice: item.promotionalPrice ? Number(item.promotionalPrice) : undefined,
+    costPrice: item.costPrice ? Number(item.costPrice) : undefined,
   };
 }
 
@@ -213,4 +223,16 @@ export async function updateProductItem(itemId: string, payload: UpdateProductIt
 
 export async function updateProductItemsBatch(items: { itemId: string; stock: number }[]) {
   return Promise.all(items.map((item) => updateProductItem(item.itemId, { stock: item.stock })));
+}
+export async function updateProduct(
+  id: string,
+  payload: Partial<CreateProductPayload>
+): Promise<ProductResponse> {
+  const response = await apiFetch(`/products/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+
+  const data = (await response.json()) as ProductApiResponse;
+  return normalizeProduct(data);
 }

@@ -31,17 +31,24 @@ export default function ProductsPage() {
 
   const duplicateMutation = useMutation({
     mutationFn: async (product: ProductResponse) => {
-      const fullProduct = await getProductById(product.id);
+      // Requisições Paralelas: Busca o produto e seus itens simultaneamente para ganhar tempo
+      const [fullProduct, items] = await Promise.all([
+        getProductById(product.id),
+        getProductItems(product.id)
+      ]);
+
       const newProduct = await createProduct({
         title: `${fullProduct.title} (Cópia)`,
         categoryId: fullProduct.categoryId,
+        price: fullProduct.price,
+        promotionalPrice: fullProduct.promotionalPrice,
+        costPrice: fullProduct.costPrice,
       });
 
       if (fullProduct.variationIds.length > 0) {
         await linkProductVariations(newProduct.id, fullProduct.variationIds);
       }
 
-      const items = await getProductItems(product.id);
       if (items.length > 0) {
         await createProductItems(
           newProduct.id,

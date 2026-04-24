@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, lazy, Suspense } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -19,23 +19,32 @@ import {
   removeProductVariation,
   removeProductVariationOption,
   replaceProductImage,
+  updateProduct,
   updateProductItemsBatch,
   uploadProductImages,
 } from "@/services/product.service";
 import { ProductDetailsForm, type ProductDetailsFormValues } from "@/components/products/ProductDetailsForm";
-import { ProductVariationSelector } from "@/components/products/ProductVariationSelector";
-import { ProductImageManager } from "@/components/products/ProductImageManager";
-import { ProductStockEditor, type QuickEditMode } from "@/components/products/ProductStockEditor";
 import { PageLoader } from "@/components/common/PageLoader";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/components/ui/use-toast";
 import type { ProductImage, ProductItem, ProductResponse } from "@/types/product";
 import type { Variation } from "@/types/variation";
+import type { QuickEditMode } from "@/components/products/ProductStockEditor";
+
+// Code Splitting: Carregamento tardio de componentes pesados das abas
+const ProductVariationSelector = lazy(() => import("@/components/products/ProductVariationSelector").then(m => ({ default: m.ProductVariationSelector })));
+const ProductImageManager = lazy(() => import("@/components/products/ProductImageManager").then(m => ({ default: m.ProductImageManager })));
+const ProductStockEditor = lazy(() => import("@/components/products/ProductStockEditor").then(m => ({ default: m.ProductStockEditor })));
 
 const productSchema = z.object({
   title: z.string().min(1, "Informe o nome do produto."),
   categoryId: z.string().min(1, "Selecione uma categoria."),
+  description: z.string().optional(),
+  descriptionFormated: z.string().optional(),
+  price: z.number().min(0, "O preço deve ser maior ou igual a zero.").optional(),
+  promotionalPrice: z.number().min(0, "O preço promocional deve ser maior ou igual a zero.").optional(),
+  costPrice: z.number().min(0, "O preço de custo deve ser maior ou igual a zero.").optional(),
 });
 
 type PendingImage = {
@@ -135,21 +144,26 @@ export default function ProductDetailsPage() {
     defaultValues: {
       title: "",
       categoryId: "",
+      description: "",
+      descriptionFormated: "",
+      price: undefined,
+      promotionalPrice: undefined,
+      costPrice: undefined,
     },
   });
 
   const { data: savedItems = [], isLoading: loadingSavedItems, refetch: refetchItems } = useProductItems(productId ?? "");
 
   useEffect(() => {
-  if (!savedItems?.length) return;
+    if (!savedItems?.length) return;
 
-      setBulkValues(
-        savedItems.reduce<Record<string, string>>((acc, item) => {
-          acc[item.id] = "";
-          return acc;
-        }, {}),
-      );
-    }, [savedItems]);
+    setBulkValues(
+      savedItems.reduce<Record<string, string>>((acc, item) => {
+        acc[item.id] = "";
+        return acc;
+      }, {}),
+    );
+  }, [savedItems]);
 
   const selectedVariations = useMemo(
     () =>
@@ -182,26 +196,35 @@ export default function ProductDetailsPage() {
     },
   });
 
-  const loadProductMutation = useMutation({
-    mutationFn: getProductById,
-    onSuccess: (product) => {
+  // Data Layer: Uso de Query com pattern Stale-While-Revalidate e cache de 5 minutos
+  const productQuery = useQuery({
+    queryKey: ["product", id],
+    queryFn: () => getProductById(id!),
+    enabled: !isNewProduct && !!id,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  useEffect(() => {
+    if (productQuery.data) {
+      const product = productQuery.data;
       setProductId(product.id);
       setImages(product.images);
       setSelectedVariationIds(product.variationIds ?? []);
       setSelectedOptionsByVariation(getSelectedOptionsMap(product));
       productForm.reset({
         title: product.title,
+        description: product.description ?? "",
+        descriptionFormated: product.descriptionFormated ?? "",
         categoryId: product.categoryId,
+        price: product.price,
+        promotionalPrice: product.promotionalPrice,
+        costPrice: product.costPrice,
       });
-    },
-    onError: () => {
-      toast({ variant: "destructive", title: "Não foi possível carregar o produto" });
-    },
-  });
+    }
+  }, [productQuery.data, productForm]);
 
   const isInitialPageLoading =
-    !isNewProduct &&
-    (loadProductMutation.isPending || categoriesQuery.loading || variationsQuery.isLoading);
+    !isNewProduct && (productQuery.isLoading || categoriesQuery.loading || variationsQuery.isLoading);
 
   const linkVariationsMutation = useMutation({
     mutationFn: async ({ currentProductId, variationIds }: { currentProductId: string; variationIds: string[] }) => {
@@ -263,6 +286,19 @@ export default function ProductDetailsPage() {
     },
     onError: (error: Error) => {
       toast({ variant: "destructive", title: error.message || "Não foi possível vincular as variações" });
+    },
+  });
+
+  // Mutation para atualizar dados básicos do produto
+  const updateProductMutation = useMutation({
+    mutationFn: (values: ProductDetailsFormValues) => updateProduct(productId!, values),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["product", id] });
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+      toast({ title: "Produto atualizado" });
+    },
+    onError: () => {
+      toast({ variant: "destructive", title: "Não foi possível atualizar o produto" });
     },
   });
 
@@ -375,27 +411,12 @@ export default function ProductDetailsPage() {
   });
 
   useEffect(() => {
-    if (!isNewProduct && id) {
-      loadProductMutation.mutate(id);
-    }
-  }, [id, isNewProduct]);
-
-  useEffect(() => {
     return () => {
       pendingImages.forEach((image) => URL.revokeObjectURL(image.previewUrl));
     };
   }, [pendingImages]);
 
-  useEffect(() => {
-    if (!productId || pendingImages.length === 0 || uploadImagesMutation.isPending || createProductMutation.isPending) {
-      return;
-    }
-
-    uploadImagesMutation.mutate({
-      currentProductId: productId,
-      files: pendingImages.map((image) => image.file),
-    });
-  }, [createProductMutation.isPending, pendingImages, productId, uploadImagesMutation]);
+  // Removido useEffect de upload automático para evitar requisições duplicadas/redundantes
 
   const handlePendingImagesChange = (files: File[]) => {
     setPendingImages((previous) => {
@@ -425,9 +446,14 @@ export default function ProductDetailsPage() {
       return;
     }
 
-    const formValues = productForm.getValues();
+    const rawValues = productForm.getValues();
+    const formValues = {
+      ...rawValues,
+      descriptionFormated: rawValues.description?.replace(/<[^>]*>/g, '').trim() ?? "",
+    };
 
     if (!productId) {
+      // Fluxo de Cadastro: Unificado (Produto -> Imagens)
       createProductMutation.mutate(formValues, {
         onSuccess: (product) => {
           if (pendingImages.length > 0) {
@@ -441,13 +467,16 @@ export default function ProductDetailsPage() {
       return;
     }
 
-    if (pendingImages.length > 0) {
+    // Fluxo de Edição: Salva os detalhes do formulário
+    await updateProductMutation.mutateAsync(formValues);
+
+    // Se houver novas fotos selecionadas no editar, envia-as agora
+    // (Fotos já existentes são gerenciadas separadamente via replace/delete)
+    if (pendingImages.length > 0 && !uploadImagesMutation.isPending) {
       uploadImagesMutation.mutate({
         currentProductId: productId,
         files: pendingImages.map((image) => image.file),
       });
-    } else {
-      toast({ title: "Produto salvo" });
     }
   };
 
@@ -629,58 +658,77 @@ export default function ProductDetailsPage() {
             form={productForm}
             categories={categories}
             onSubmit={() => void handleSaveProductSection()}
-            isSaving={createProductMutation.isPending || loadProductMutation.isPending || uploadImagesMutation.isPending}
-            productId={productId}
           />
 
-          <ProductImageManager
-            images={images}
-            pendingImages={pendingImages}
-            isUploading={uploadImagesMutation.isPending}
-            isDeletingImage={deleteImageMutation.isPending}
-            isUpdatingImage={replaceImageMutation.isPending}
-            onPendingImagesChange={handlePendingImagesChange}
-            onRemovePendingImage={handleRemovePendingImage}
-            onDeleteImage={(imageId) => {
-              if (!productId) {
-                return;
+          <Suspense fallback={<PageLoader message="Carregando gestor de imagens..." />}>
+            <ProductImageManager
+              images={images}
+              pendingImages={pendingImages}
+              isUploading={uploadImagesMutation.isPending}
+              isDeletingImage={deleteImageMutation.isPending}
+              isUpdatingImage={replaceImageMutation.isPending}
+              onPendingImagesChange={handlePendingImagesChange}
+              onRemovePendingImage={handleRemovePendingImage}
+              onDeleteImage={(imageId) => {
+                if (!productId) {
+                  return;
+                }
+                deleteImageMutation.mutate({ currentProductId: productId, imageId });
+              }}
+              onReplaceImage={async (imageId, file) => {
+                if (!productId) {
+                  return;
+                }
+                await replaceImageMutation.mutateAsync({ currentProductId: productId, imageId, file });
+              }}
+            />
+          </Suspense>
+
+          <div className="flex justify-end">
+            <Button
+              type="button"
+              className="rounded-xl px-6"
+              disabled={
+                createProductMutation.isPending ||
+                updateProductMutation.isPending ||
+                productQuery.isFetching ||
+                uploadImagesMutation.isPending
               }
-              deleteImageMutation.mutate({ currentProductId: productId, imageId });
-            }}
-            onReplaceImage={async (imageId, file) => {
-              if (!productId) {
-                return;
-              }
-              await replaceImageMutation.mutateAsync({ currentProductId: productId, imageId, file });
-            }}
-          />
+              onClick={() => void handleSaveProductSection()}
+            >
+              <Save className="mr-2 h-4 w-4" />
+              {productId ? "Salvar produto" : "Criar produto"}
+            </Button>
+          </div>
         </TabsContent>
 
         <TabsContent value="variacoes" className="space-y-6">
-          <ProductVariationSelector
-            variations={variations}
-            selectedVariationIds={selectedVariationIds}
-            selectedOptionsByVariation={selectedOptionsByVariation}
-            onChangeVariation={handleChangeVariation}
-            onAddSlot={handleAddVariationSlot}
-            onRemoveSlot={handleRemoveVariationSlot}
-            onToggleOption={handleToggleVariationOption}
-            onToggleAllOptions={handleToggleAllVariationOptions}
-            onRemoveVariation={(variationId) => {
-              if (!productId) return;
-              removeVariationMutation.mutate({ currentProductId: productId, variationId });
-            }}
-            onRemoveVariationOption={(variationId, optionId) => {
-              if (!productId) return;
-              removeVariationOptionMutation.mutate({ currentProductId: productId, variationId, optionId });
-            }}
-            disabled={
-              !productId ||
-              linkVariationsMutation.isPending ||
-              removeVariationMutation.isPending ||
-              removeVariationOptionMutation.isPending
-            }
-          />
+          <Suspense fallback={<PageLoader message="Carregando variações..." />}>
+            <ProductVariationSelector
+              variations={variations}
+              selectedVariationIds={selectedVariationIds}
+              selectedOptionsByVariation={selectedOptionsByVariation}
+              onChangeVariation={handleChangeVariation}
+              onAddSlot={handleAddVariationSlot}
+              onRemoveSlot={handleRemoveVariationSlot}
+              onToggleOption={handleToggleVariationOption}
+              onToggleAllOptions={handleToggleAllVariationOptions}
+              onRemoveVariation={(variationId) => {
+                if (!productId) return;
+                removeVariationMutation.mutate({ currentProductId: productId, variationId });
+              }}
+              onRemoveVariationOption={(variationId, optionId) => {
+                if (!productId) return;
+                removeVariationOptionMutation.mutate({ currentProductId: productId, variationId, optionId });
+              }}
+              disabled={
+                !productId ||
+                linkVariationsMutation.isPending ||
+                removeVariationMutation.isPending ||
+                removeVariationOptionMutation.isPending
+              }
+            />
+          </Suspense>
 
           <div>
             <Button
@@ -695,23 +743,25 @@ export default function ProductDetailsPage() {
         </TabsContent>
 
         <TabsContent value="estoque" className="space-y-6">
-          <ProductStockEditor
-            productReady={!!productId}
-            hasVariations={selectedVariations.length > 0}
-            loadingSavedItems={loadingSavedItems}
-            savedItems={orderedSavedItems}
-            bulkMode={bulkMode}
-            bulkValues={bulkValues}
-            isSaving={updateStockBatchMutation.isPending}
-            onModeChange={setBulkMode}
-            onValueChange={(itemId, value) => {
-              setBulkValues((prev) => ({
-                ...prev,
-                [itemId]: value,
-              }));
-            }}
-            onSaveAll={handleSaveAllStocks}
-          />
+          <Suspense fallback={<PageLoader message="Carregando editor de estoque..." />}>
+            <ProductStockEditor
+              productReady={!!productId}
+              hasVariations={selectedVariations.length > 0}
+              loadingSavedItems={loadingSavedItems}
+              savedItems={orderedSavedItems}
+              bulkMode={bulkMode}
+              bulkValues={bulkValues}
+              isSaving={updateStockBatchMutation.isPending}
+              onModeChange={setBulkMode}
+              onValueChange={(itemId, value) => {
+                setBulkValues((prev) => ({
+                  ...prev,
+                  [itemId]: value,
+                }));
+              }}
+              onSaveAll={handleSaveAllStocks}
+            />
+          </Suspense>
         </TabsContent>
       </Tabs>
     </div>

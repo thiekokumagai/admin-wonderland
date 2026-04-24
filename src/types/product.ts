@@ -28,6 +28,11 @@ export type ProductResponse = {
   variationIds: string[];
   variations: SavedProductVariation[];
   itemsCount: number;
+  price?: number;
+  promotionalPrice?: number;
+  costPrice?: number;
+  description?: string;
+  descriptionFormated?: string;
 };
 
 export type ProductVariationLinkPayload = {
@@ -50,6 +55,9 @@ export type ProductItem = {
 export type CreateProductPayload = {
   title: string;
   categoryId: string;
+  price?: number;
+  promotionalPrice?: number;
+  costPrice?: number;
 };
 
 export type CreateProductItemPayload = {

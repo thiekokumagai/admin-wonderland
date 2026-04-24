@@ -1,31 +1,32 @@
-import { Save } from "lucide-react";
 import { UseFormReturn } from "react-hook-form";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { RichTextEditor } from "@/components/ui/richtexteditor";
+import { NumericFormat } from "react-number-format";
 import type { CategoryList } from "@/types/category";
 
 export type ProductDetailsFormValues = {
   title: string;
   categoryId: string;
+  description?: string;
+  descriptionFormated?: string;
+  price?: number;
+  promotionalPrice?: number;
+  costPrice?: number;
 };
 
 type ProductDetailsFormProps = {
   form: UseFormReturn<ProductDetailsFormValues>;
   categories: CategoryList[];
   onSubmit: (values: ProductDetailsFormValues) => void;
-  isSaving: boolean;
-  productId: string | null;
 };
 
 export function ProductDetailsForm({
   form,
   categories,
   onSubmit,
-  isSaving,
-  productId,
 }: ProductDetailsFormProps) {
   return (
     <Card className="rounded-3xl">
@@ -76,20 +77,118 @@ export function ProductDetailsForm({
                 )}
               />
             </div>
+
+            <FormField
+              control={form.control}
+              name="description"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Descrição (Suporta HTML)</FormLabel>
+                  <FormControl>
+                    <RichTextEditor
+                      value={field.value}
+                      onChange={field.onChange}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <div className="grid gap-5 md:grid-cols-3">
+              <FormField
+                control={form.control}
+                name="price"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Preço (Venda)</FormLabel>
+                    <FormControl>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">R$</span>
+                        <NumericFormat
+                          customInput={Input}
+                          decimalSeparator=","
+                          thousandSeparator="."
+                          decimalScale={2}
+                          fixedDecimalScale
+                          allowNegative={false}
+                          className="h-12 rounded-2xl pl-9"
+                          placeholder="0,00"
+                          value={field.value}
+                          onValueChange={(values) => {
+                            field.onChange(values.floatValue);
+                          }}
+                        />
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="promotionalPrice"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Preço Promocional</FormLabel>
+                    <FormControl>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">R$</span>
+                        <NumericFormat
+                          customInput={Input}
+                          decimalSeparator=","
+                          thousandSeparator="."
+                          decimalScale={2}
+                          fixedDecimalScale
+                          allowNegative={false}
+                          className="h-12 rounded-2xl pl-9"
+                          placeholder="0,00"
+                          value={field.value}
+                          onValueChange={(values) => {
+                            field.onChange(values.floatValue);
+                          }}
+                        />
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="costPrice"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Preço de Custo</FormLabel>
+                    <FormControl>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">R$</span>
+                        <NumericFormat
+                          customInput={Input}
+                          decimalSeparator=","
+                          thousandSeparator="."
+                          decimalScale={2}
+                          fixedDecimalScale
+                          allowNegative={false}
+                          className="h-12 rounded-2xl pl-9"
+                          placeholder="0,00"
+                          value={field.value}
+                          onValueChange={(values) => {
+                            field.onChange(values.floatValue);
+                          }}
+                        />
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
           </form>
         </Form>
       </CardContent>
-      <div className="flex justify-end px-6 pb-6">
-        <Button
-          type="button"
-          className="rounded-xl px-6"
-          disabled={isSaving}
-          onClick={form.handleSubmit(onSubmit)}
-        >
-          <Save className="mr-2 h-4 w-4" />
-          {productId ? "Salvar produto" : "Criar produto"}
-        </Button>
-      </div>
     </Card>
   );
 }
