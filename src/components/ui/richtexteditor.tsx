@@ -45,30 +45,30 @@ export function RichTextEditor({ value, onChange }: Props) {
       <div className="flex flex-wrap items-center gap-1 p-1.5 bg-muted/20 border-b">
         <Button
           type="button"
-          variant={editor.isActive("bold") ? "secondary" : "ghost"}
+          variant="ghost"
           size="sm"
           onClick={() => editor.chain().focus().toggleBold().run()}
-          className="h-8 w-8 p-0"
+          className={cn("h-8 w-8 p-0", editor.isActive("bold") && "bg-accent text-accent-foreground")}
           title="Negrito"
         >
           <Bold className={cn("h-4 w-4", editor.isActive("bold") && "stroke-[2.5px]")} />
         </Button>
         <Button
           type="button"
-          variant={editor.isActive("italic") ? "secondary" : "ghost"}
+          variant="ghost"
           size="sm"
           onClick={() => editor.chain().focus().toggleItalic().run()}
-          className="h-8 w-8 p-0"
+          className={cn("h-8 w-8 p-0", editor.isActive("italic") && "bg-accent text-accent-foreground")}
           title="Itálico"
         >
           <Italic className={cn("h-4 w-4", editor.isActive("italic") && "stroke-[2.5px]")} />
         </Button>
         <Button
           type="button"
-          variant={editor.isActive("strike") ? "secondary" : "ghost"}
+          variant="ghost"
           size="sm"
           onClick={() => editor.chain().focus().toggleStrike().run()}
-          className="h-8 w-8 p-0"
+          className={cn("h-8 w-8 p-0", editor.isActive("strike") && "bg-accent text-accent-foreground")}
           title="Riscado"
         >
           <Strikethrough className={cn("h-4 w-4", editor.isActive("strike") && "stroke-[2.5px]")} />
@@ -78,10 +78,10 @@ export function RichTextEditor({ value, onChange }: Props) {
 
         <Button
           type="button"
-          variant={editor.isActive("heading", { level: 2 }) ? "secondary" : "ghost"}
+          variant="ghost"
           size="sm"
           onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-          className="h-8 w-8 p-0"
+          className={cn("h-8 w-8 p-0", editor.isActive("heading", { level: 2 }) && "bg-accent text-accent-foreground")}
           title="Título"
         >
           <Heading2 className={cn("h-4 w-4", editor.isActive("heading", { level: 2 }) && "stroke-[2.5px]")} />
@@ -91,20 +91,20 @@ export function RichTextEditor({ value, onChange }: Props) {
 
         <Button
           type="button"
-          variant={editor.isActive("bulletList") ? "secondary" : "ghost"}
+          variant="ghost"
           size="sm"
           onClick={() => editor.chain().focus().toggleBulletList().run()}
-          className="h-8 w-8 p-0"
+          className={cn("h-8 w-8 p-0", editor.isActive("bulletList") && "bg-accent text-accent-foreground")}
           title="Lista com marcadores"
         >
           <List className={cn("h-4 w-4", editor.isActive("bulletList") && "stroke-[2.5px]")} />
         </Button>
         <Button
           type="button"
-          variant={editor.isActive("orderedList") ? "secondary" : "ghost"}
+          variant="ghost"
           size="sm"
           onClick={() => editor.chain().focus().toggleOrderedList().run()}
-          className="h-8 w-8 p-0"
+          className={cn("h-8 w-8 p-0", editor.isActive("orderedList") && "bg-accent text-accent-foreground")}
           title="Lista numerada"
         >
           <ListOrdered className={cn("h-4 w-4", editor.isActive("orderedList") && "stroke-[2.5px]")} />
